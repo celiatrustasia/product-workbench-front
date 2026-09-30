@@ -1,0 +1,22 @@
+[Unit]
+Description=Product Workbench API
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=workbench
+Group=workbench
+WorkingDirectory=/opt/product-workbench/server
+ExecStart=/usr/bin/node --env-file=/etc/product-workbench.env src/main.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/product-workbench
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

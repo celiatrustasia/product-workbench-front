@@ -1,6 +1,13 @@
 node_modules
 dist
 .env.local
+.env
+.env.*
+!.env.example
+server/.runtime/
+credentials/
+*.pem
+*ed25519*
 .DS_Store
 *.zip
 *.tsbuildinfo

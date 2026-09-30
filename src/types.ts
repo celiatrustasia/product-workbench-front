@@ -11,6 +11,7 @@ export interface Person {
   access: '管理员' | '普通成员';
   active: boolean;
   color: string;
+  mustChangePassword?: boolean;
 }
 
 export interface Platform {
@@ -41,12 +42,15 @@ export interface Attachment {
   name: string;
   size: number;
   dataUrl: string;
+  mime?: string;
 }
 
 export interface WorkBase {
   id: string;
+  code?: string;
   title: string;
   description: string;
+  descriptionImages?: Attachment[];
   platformId: string;
   priority: Priority;
   manualFocus: boolean;
@@ -58,6 +62,7 @@ export interface WorkBase {
   createdAt: string;
   updatedAt: string;
   archived: boolean;
+  revision?: number;
 }
 
 export interface Requirement extends WorkBase {
@@ -103,6 +108,7 @@ export interface Activity {
 }
 
 export interface WorkbenchData {
+  nextNumbers?: Record<WorkKind, number>;
   people: Person[];
   platforms: Platform[];
   dictionary: DictionaryItem[];

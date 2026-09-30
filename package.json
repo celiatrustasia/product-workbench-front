@@ -4,9 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "start:local": "node scripts/local.mjs",
+    "stop:local": "node scripts/local.mjs stop",
+    "dev:preview": "VITE_DATA_MODE=preview vite --host 127.0.0.1",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",

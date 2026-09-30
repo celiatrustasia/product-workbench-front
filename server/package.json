@@ -1,0 +1,25 @@
+{
+  "name": "product-workbench-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/main.mjs",
+    "dev": "node --env-file-if-exists=.env --watch src/main.mjs",
+    "migrate": "node --env-file-if-exists=.env src/migrate.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "cookie": "^2.0.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "file-type": "^22.1.1",
+    "helmet": "^8.3.0",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.4",
+    "zod": "^4.6.5"
+  }
+}

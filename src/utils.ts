@@ -6,9 +6,20 @@ export const taskStatuses = ['待处理', '进行中', '阻塞', '已完成', '�
 export const priorities = ['P1', 'P2', 'P3', 'P4'] as const;
 export const priorityNames: Record<string, string> = { P1: '重要紧急', P2: '重要不紧急', P3: '不重要紧急', P4: '不重要不紧急' };
 
-export const formatDate = (date?: string, withTime = false) => date ? dayjs(date).format(withTime ? 'YYYY/MM/DD HH:mm' : 'MM/DD') : '—';
+export const formatDate = (date?: string, withTime = false) => date ? dayjs(date).format(withTime ? 'YYYY/MM/DD HH:mm' : 'YYYY/MM/DD') : '—';
+export const workCode = (item: WorkBase) => item.code || item.id;
 export const formatLongDate = (date?: string) => date ? dayjs(date).format('YYYY年M月D日') : '—';
 export const daysUntil = (date?: string) => date ? dayjs(date).startOf('day').diff(dayjs().startOf('day'), 'day') : null;
+
+export function dueListPageSize(listHeight: number | null, total: number) {
+  if (listHeight === null) return 8;
+  // Match the due panel header, row and pagination dimensions in styles.css.
+  const chromeHeight = 65;
+  const rowHeight = 64;
+  const paginationHeight = 46;
+  const capacity = Math.max(1, Math.floor((listHeight - chromeHeight) / rowHeight));
+  return total <= capacity ? capacity : Math.max(1, Math.floor((listHeight - chromeHeight - paginationHeight) / rowHeight));
+}
 
 export function weekBounds() {
   const today = dayjs();

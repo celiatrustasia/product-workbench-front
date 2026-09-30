@@ -29,8 +29,8 @@ export function FocusTags({ item }: { item: Requirement | Task }) {
   return <span className="tag-row">{focusReasons(item).map(reason => <Tag key={reason} className={`focus-tag ${reason === '手动重点' ? 'amber' : 'blue'}`}>{reason}</Tag>)}</span>;
 }
 
-export function PageHeading({ kicker, title, description, action }: { kicker?: string; title: string; description?: string; action?: ReactNode }) {
-  return <div className="page-heading"><div>{kicker && <div className="eyebrow">{kicker}</div>}<h1>{title}</h1>{description && <p>{description}</p>}</div><div className="page-action">{action}</div></div>;
+export function PageHeading({ kicker, title, action }: { kicker?: string; title: string; action?: ReactNode }) {
+  return <div className="page-heading"><div>{kicker && <div className="eyebrow">{kicker}</div>}<h1>{title}</h1></div><div className="page-action">{action}</div></div>;
 }
 
 export function StatStrip({ items }: { items: { label: string; value: number; note?: string; tone?: string; onClick?: () => void }[] }) {
