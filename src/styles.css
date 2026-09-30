@@ -164,6 +164,7 @@ body{background:var(--page-bg)}
 .focus-chart-legend>button:focus-visible{outline:2px solid #7197e4;outline-offset:1px}
 .focus-mobile-owner{display:flex;justify-content:space-between;gap:8px;margin-top:9px;color:#75869d;font-size:10px}
 .drag-handle{border:0;background:transparent;border-radius:3px;padding:0;touch-action:none}
+.compact-table .ant-table-cell.drag-handle-cell{padding-inline:8px!important;overflow:visible;text-overflow:clip}
 .drag-handle:focus-visible{outline:2px solid #7197e4}
 .drop-target-row>td{box-shadow:inset 0 2px #3f73dc;background:#edf3ff!important}
 .management-surface .ant-table-cell-fix-right{background:#fff}
