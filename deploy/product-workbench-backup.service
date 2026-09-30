@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up Product Workbench MySQL database
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/product-workbench-backup
+UMask=0077
+PrivateTmp=true

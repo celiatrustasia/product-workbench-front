@@ -30,8 +30,16 @@ body{background:var(--page-bg)}
 .ant-table-wrapper .ant-table-thead>tr>th{color:#536987!important;background:#f6f8fc!important;border-bottom-color:#dfe7f1;font-size:11px;font-weight:700}
 .ant-table-wrapper .ant-table-tbody>tr>td{border-bottom-color:#e8edf4;color:#334b6a}
 .ant-table-wrapper .ant-table-tbody>tr:hover>td{background:#f5f8fd!important}
-.compact-table .ant-table-thead>tr>th,.compact-table .ant-table-tbody>tr>td{padding:10px 12px!important}
-.compact-table .ant-table-cell{overflow:hidden;text-overflow:ellipsis}
+.compact-table .ant-table-thead>tr>th{height:40px;padding:8px 12px!important;line-height:20px}
+.compact-table .ant-table-tbody>tr.ant-table-row>td{height:56px;padding:6px 12px!important;line-height:18px;vertical-align:middle}
+/* The column measurement row must remain zero-height. */
+.compact-table .ant-table-tbody>tr.ant-table-measure-row>td{height:0;padding:0!important;border:0!important}
+.compact-table .ant-table-cell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compact-table .list-title strong,.compact-table .list-title small,.compact-table .person-line strong,.compact-table .person-line small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compact-table .list-title strong,.compact-table .person-line strong{line-height:18px}
+.compact-table .list-title small,.compact-table .person-line small{line-height:16px}
+.compact-table .person-line{margin:0}
+.compact-table .person-line>span{min-width:0}
 .management-page .page-heading,.management-page .management-surface{max-width:920px}
 .management-page .management-dictionaries{max-width:680px}
 .management-surface .ant-table{table-layout:fixed}
@@ -164,7 +172,7 @@ body{background:var(--page-bg)}
 .focus-chart-legend>button:focus-visible{outline:2px solid #7197e4;outline-offset:1px}
 .focus-mobile-owner{display:flex;justify-content:space-between;gap:8px;margin-top:9px;color:#75869d;font-size:10px}
 .drag-handle{border:0;background:transparent;border-radius:3px;padding:0;touch-action:none}
-.compact-table .ant-table-cell.drag-handle-cell{padding-inline:8px!important;overflow:visible;text-overflow:clip}
+.compact-table .ant-table-tbody>tr.ant-table-row>td.drag-handle-cell{padding-inline:8px!important;overflow:visible;text-overflow:clip}
 .drag-handle:focus-visible{outline:2px solid #7197e4}
 .drop-target-row>td{box-shadow:inset 0 2px #3f73dc;background:#edf3ff!important}
 .management-surface .ant-table-cell-fix-right{background:#fff}

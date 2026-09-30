@@ -1,6 +1,6 @@
 # 产品工作台
 
-面向产品、研发和测试团队的协作工作台。React + TypeScript + Ant Design 前端，Express REST 后端，MySQL 8.4 数据库。前后端源码独立，当前本地应用已连接云 MySQL 的独立库 `friend_product_workbench`；网站尚未部署上线。
+面向产品、研发和测试团队的协作工作台。React + TypeScript + Ant Design 前端，Express REST 后端，MySQL 8.4 数据库。前后端源码独立，生产环境域名为 [celiawang.fun](https://celiawang.fun)，使用云 MySQL 的独立库 `friend_product_workbench`；本地应用连接同一数据库。
 
 ## 本地运行
 

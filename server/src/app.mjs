@@ -23,6 +23,8 @@ const fileUpload = multer({ storage:multer.memoryStorage(), limits:{fileSize:102
 export function createApp() {
   const app=express();
   app.disable('x-powered-by');
+  // Only the local reverse proxy may supply the client address.
+  if(config.production) app.set('trust proxy','loopback');
   app.use((_req,res,next)=>{res.locals.nonce=randomBytes(16).toString('base64');next();});
   app.use(helmet({contentSecurityPolicy:{directives:{'script-src':["'self'",(_req,res)=>`'nonce-${res.locals.nonce}'`],'style-src':["'self'","'unsafe-inline'"],'img-src':["'self'",'data:','blob:'],'connect-src':["'self'"],'upgrade-insecure-requests':config.production ? [] : null}},strictTransportSecurity:config.production ? undefined : false}));
   app.use('/api',originGuard,express.json({limit:'200kb'}),(_req,res,next)=>{res.setHeader('Cache-Control','no-store');next();});
