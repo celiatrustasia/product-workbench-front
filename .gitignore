@@ -11,3 +11,6 @@ credentials/
 .DS_Store
 *.zip
 *.tsbuildinfo
+/previews/
+/docs/design/
+/docs/产品工作台_PRD-V*.md
