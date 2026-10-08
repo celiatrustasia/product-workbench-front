@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew Product Workbench HTTPS certificate
+After=network-online.target docker.service nginx.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/product-workbench-renew-certificate
+UMask=0077
+TimeoutStartSec=5min
