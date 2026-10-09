@@ -37,9 +37,9 @@ function FocusMetric({ type, items }: { type: 'requirement' | 'task'; items: Met
     return { ...item, path: ringPath(start, end), offset: `translate(${Math.sin(middle) * 5}px,${-Math.cos(middle) * 5}px)` };
   });
   return <section className={`focus-metric-card ${type}`}>
-    <div className="focus-metric-header"><span className="focus-metric-icon">{type === 'requirement' ? <DatabaseOutlined /> : <CheckSquareOutlined />}</span><h2 className="focus-metric-title">本周重点关注{type === 'requirement' ? '需求' : '任务'}</h2><Button type="link" size="small" className="focus-metric-link" onClick={() => go()}>查看列表 <ArrowRightOutlined /></Button></div>
+    <div className="focus-metric-header"><span className="focus-metric-icon">{type === 'requirement' ? <DatabaseOutlined /> : <CheckSquareOutlined />}</span><h2 className="focus-metric-title">重点关注{type === 'requirement' ? '需求' : '任务'}</h2><Button type="link" size="small" className="focus-metric-link" onClick={() => go()}>查看列表 <ArrowRightOutlined /></Button></div>
     <div className="focus-chart-body"><div className="focus-donut interactive-donut">
-      <svg viewBox="0 0 200 200" aria-label={`本周重点${type === 'requirement' ? '需求' : '任务'}：${total} 项`} onMouseLeave={() => setActive(undefined)}>
+      <svg viewBox="0 0 200 200" aria-label={`重点关注${type === 'requirement' ? '需求' : '任务'}：${total} 项`} onMouseLeave={() => setActive(undefined)}>
         {!total && <circle cx="100" cy="100" r="72.5" fill="none" stroke="#edf1f6" strokeWidth="27" />}
         {segments.map(item => <path key={item.status} d={item.path} fill={item.color} className={`donut-segment ${active === item.status ? 'is-active' : active ? 'is-muted' : ''}`} style={{ transform: active === item.status ? item.offset : undefined, '--segment-glow': `${item.color}85` } as CSSProperties} tabIndex={0} role="button" aria-label={`${item.label}：${item.value} 项，${Math.round(item.value / total * 100)}%`} onPointerMove={() => setActive(item.status)} onPointerLeave={() => setActive(undefined)} onMouseEnter={() => setActive(item.status)} onFocus={() => setActive(item.status)} onBlur={() => setActive(undefined)} onClick={() => go(item.status)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go(item.status); } }}><title>{item.label}：{item.value} 项（{Math.round(item.value / total * 100)}%）</title></path>)}
       </svg><span aria-live="polite"><strong>{selected?.value ?? total}</strong><small>{selected ? selected.label : '合计事项'}</small>{selected && <small>{total ? Math.round(selected.value / total * 100) : 0}%</small>}</span>
@@ -50,7 +50,7 @@ function FocusMetric({ type, items }: { type: 'requirement' | 'task'; items: Met
 export default function Dashboard() {
   const { data, user } = useWorkspace();
   const navigate = useNavigate();
-  const [scope, setScope] = useState('本周重点');
+  const [scope, setScope] = useState('重点关注');
   const [page, setPage] = useState(1);
   const [duePage, setDuePage] = useState(1);
   const [listHeight, setListHeight] = useState<number | null>(null);
@@ -71,7 +71,7 @@ export default function Dashboard() {
   const all = [...requirements, ...tasks];
   const focusedRequirements = requirements.filter(item => focusReasons(item).length);
   const focusedTasks = tasks.filter(item => focusReasons(item).length);
-  const visible = all.filter(item => scope === '本周重点' ? focusReasons(item).length > 0 : scope === '我负责的' ? item.ownerId === user?.id : item.participantIds.includes(user!.id)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const visible = all.filter(item => scope === '重点关注' ? focusReasons(item).length > 0 : scope === '我负责的' ? item.ownerId === user?.id : item.participantIds.includes(user!.id)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const pageSize = 8;
   const safePage = Math.min(page, Math.max(1, Math.ceil(visible.length / pageSize)));
   const due = dueItems(data);
@@ -88,14 +88,14 @@ export default function Dashboard() {
     { title: '状态', width: 88, render: (_, item) => <StatusTag status={item.status} /> },
     { title: '关注原因', width: 150, render: (_, item) => <FocusTags item={item} /> },
     { title: '负责人', width: 104, render: (_, item) => <span className="owner-cell"><PersonAvatar person={data.people.find(person => person.id === item.ownerId)} size="small" /><span>{displayName(data, item.ownerId)}</span></span> },
-    { title: '时间', width: 112, render: (_, item) => <span className="date-cell">{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</span> },
+    { title: '上线 / 截止时间', width: 132, render: (_, item) => <span className="date-cell">{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}<small className="cell-sub">{isTask(item) ? '最终截止时间' : '目标上线时间'}</small></span> },
   ];
   const selectScope = (value: string) => { setScope(value); setPage(1); };
   return <div className="page dashboard"><PageHeading kicker={`第 ${String(isoWeekNumber()).padStart(2, '0')} 周 · ${start.add(3, 'day').year()}`} title="产品工作台" />
     <div className="focus-metric-grid"><FocusMetric type="requirement" items={requirementStatuses.map((label, index) => ({ label, status: label, value: focusedRequirements.filter(item => item.status === label).length, color: requirementColors[index] }))} /><FocusMetric type="task" items={taskStatuses.map((status, index) => ({ label: status === '待处理' ? '待开始' : status, status, value: focusedTasks.filter(item => item.status === status).length, color: taskColors[index] }))} /></div>
-    <div className="dashboard-grid"><section ref={listRef} className="surface focus-surface"><div className="surface-header focus-header"><Segmented value={scope} onChange={value => selectScope(String(value))} options={['本周重点', '我负责的', '我参与的']} /><span className="muted">共 {visible.length} 项</span></div>
-      <div className="data-scroll"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={visible.slice((safePage - 1) * pageSize, safePage * pageSize)} pagination={false} scroll={{ x: 812 }} rowClassName="clickable-row" onRow={item => ({ onClick: () => navigate(href(item)) })} locale={{ emptyText: '当前没有符合条件的事项' }} /></div>
-      <div className="focus-mobile-list">{visible.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <button className="focus-mobile-row" key={item.id} onClick={() => navigate(href(item))}><div><strong>{item.title}</strong><PriorityTag priority={item.priority} /></div><small>{workCode(item)} · {isTask(item) ? '任务' : '需求'} · {platformName(data, item.platformId)}</small><div className="focus-mobile-foot"><StatusTag status={item.status} /><FocusTags item={item} /></div><div className="focus-mobile-owner"><span>负责人：{displayName(data, item.ownerId)}</span><time>{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</time></div></button>)}{!visible.length && <div className="empty-block">当前没有符合条件的事项</div>}</div>
+    <div className="dashboard-grid"><section ref={listRef} className="surface focus-surface"><div className="surface-header focus-header"><Segmented value={scope} onChange={value => selectScope(String(value))} options={['重点关注', '我负责的', '我参与的']} /><span className="muted">共 {visible.length} 项</span></div>
+      <div className="data-scroll"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={visible.slice((safePage - 1) * pageSize, safePage * pageSize)} pagination={false} scroll={{ x: 832 }} rowClassName="clickable-row" onRow={item => ({ onClick: () => navigate(href(item)) })} locale={{ emptyText: '当前没有符合条件的事项' }} /></div>
+      <div className="focus-mobile-list">{visible.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <button className="focus-mobile-row" key={item.id} onClick={() => navigate(href(item))}><div><strong>{item.title}</strong><PriorityTag priority={item.priority} /></div><small>{workCode(item)} · {isTask(item) ? '任务' : '需求'} · {platformName(data, item.platformId)}</small><div className="focus-mobile-foot"><StatusTag status={item.status} /><FocusTags item={item} /></div><div className="focus-mobile-owner"><span>负责人：{displayName(data, item.ownerId)}</span><time>{isTask(item) ? '最终截止时间' : '目标上线时间'}：{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</time></div></button>)}{!visible.length && <div className="empty-block">当前没有符合条件的事项</div>}</div>
       <Pagination className="focus-pagination" current={safePage} pageSize={pageSize} total={visible.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} />
     </section><aside className="dashboard-aside"><section className="surface due-surface" aria-label="临期与逾期事项"><div className="surface-header"><h2>临期与逾期 <span className="muted">{due.length} 项</span></h2></div><div className="alert-list">{due.slice((safeDuePage - 1) * duePageSize, safeDuePage * duePageSize).map(item => <Link to={href(item)} className="alert-item" key={item.id}><span className={`alert-dot ${dueLabel(item).includes('逾期') ? 'red' : 'amber'}`} /><span><strong>{item.title}</strong><small>{workCode(item)} · {isTask(item) ? '最终截止时间' : '目标上线时间'}</small></span><em className={dueLabel(item).includes('逾期') ? 'red' : ''}>{dueLabel(item)}</em></Link>)}{!due.length && <div className="empty-block">暂无临期事项</div>}</div>{due.length > duePageSize && <nav className="due-pagination" aria-label="临期与逾期分页"><Pagination size="small" simple={{ readOnly: true }} current={safeDuePage} pageSize={duePageSize} total={due.length} onChange={setDuePage} showSizeChanger={false} /></nav>}</section></aside></div>
   </div>;

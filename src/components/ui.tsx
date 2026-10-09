@@ -26,7 +26,7 @@ export function PriorityTag({ priority }: { priority: Priority }) {
 }
 
 export function FocusTags({ item }: { item: Requirement | Task }) {
-  return <span className="tag-row">{focusReasons(item).map(reason => <Tag key={reason} className={`focus-tag ${reason === '手动重点' ? 'amber' : 'blue'}`}>{reason}</Tag>)}</span>;
+  return <span className="tag-row">{focusReasons(item).map(reason => <Tag key={reason} className={`focus-tag ${reason === '手动重点' ? 'amber' : 'blue'}`}>{reason === '本周节点' ? '时间节点' : reason}</Tag>)}</span>;
 }
 
 export function PageHeading({ kicker, title, action }: { kicker?: string; title: string; action?: ReactNode }) {
