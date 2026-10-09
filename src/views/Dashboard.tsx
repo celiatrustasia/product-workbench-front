@@ -7,6 +7,7 @@ import { useWorkspace } from '../data/workspace';
 import { FocusTags, PageHeading, PersonAvatar, PriorityTag, StatusTag } from '../components/ui';
 import type { Requirement, Task } from '../types';
 import { displayName, dueItems, dueLabel, dueListPageSize, focusReasons, formatDate, isoWeekNumber, platformName, requirementStatuses, taskStatuses, weekBounds, workCode } from '../utils';
+import { getStatusColor } from '../statusColors';
 
 type Work = Requirement | Task;
 type MetricItem = { label: string; status: string; value: number; color: string };
@@ -79,8 +80,6 @@ export default function Dashboard() {
   const safeDuePage = Math.min(duePage, Math.max(1, Math.ceil(due.length / duePageSize)));
   useEffect(() => { setDuePage(1); }, [duePageSize]);
   const { start } = weekBounds();
-  const requirementColors = ['#d69a38', '#8a6fc6', '#3f73dc', '#3c93ba', '#2d9b78'];
-  const taskColors = ['#7898d2', '#2d9b78', '#d55461', '#3f73dc', '#98a2b3'];
   const columns: TableColumnsType<Work> = [
     { title: '事项', width: 200, render: (_, item) => <div className="list-title"><strong>{item.title}</strong><small>{workCode(item)} · <PriorityTag priority={item.priority} /></small></div> },
     { title: '类型', width: 66, render: (_, item) => <Tag className={`work-kind-tag ${isTask(item) ? 'task' : ''}`}>{isTask(item) ? '任务' : '需求'}</Tag> },
@@ -92,7 +91,7 @@ export default function Dashboard() {
   ];
   const selectScope = (value: string) => { setScope(value); setPage(1); };
   return <div className="page dashboard"><PageHeading kicker={`第 ${String(isoWeekNumber()).padStart(2, '0')} 周 · ${start.add(3, 'day').year()}`} title="产品工作台" />
-    <div className="focus-metric-grid"><FocusMetric type="requirement" items={requirementStatuses.map((label, index) => ({ label, status: label, value: focusedRequirements.filter(item => item.status === label).length, color: requirementColors[index] }))} /><FocusMetric type="task" items={taskStatuses.map((status, index) => ({ label: status === '待处理' ? '待开始' : status, status, value: focusedTasks.filter(item => item.status === status).length, color: taskColors[index] }))} /></div>
+    <div className="focus-metric-grid"><FocusMetric type="requirement" items={requirementStatuses.map(label => ({ label, status: label, value: focusedRequirements.filter(item => item.status === label).length, color: getStatusColor(label) }))} /><FocusMetric type="task" items={taskStatuses.map(status => ({ label: status === '待处理' ? '待开始' : status, status, value: focusedTasks.filter(item => item.status === status).length, color: getStatusColor(status) }))} /></div>
     <div className="dashboard-grid"><section ref={listRef} className="surface focus-surface"><div className="surface-header focus-header"><Segmented value={scope} onChange={value => selectScope(String(value))} options={['重点关注', '我负责的', '我参与的']} /><span className="muted">共 {visible.length} 项</span></div>
       <div className="data-scroll"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={visible.slice((safePage - 1) * pageSize, safePage * pageSize)} pagination={false} scroll={{ x: 832 }} rowClassName="clickable-row" onRow={item => ({ onClick: () => navigate(href(item)) })} locale={{ emptyText: '当前没有符合条件的事项' }} /></div>
       <div className="focus-mobile-list">{visible.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <button className="focus-mobile-row" key={item.id} onClick={() => navigate(href(item))}><div><strong>{item.title}</strong><PriorityTag priority={item.priority} /></div><small>{workCode(item)} · {isTask(item) ? '任务' : '需求'} · {platformName(data, item.platformId)}</small><div className="focus-mobile-foot"><StatusTag status={item.status} /><FocusTags item={item} /></div><div className="focus-mobile-owner"><span>负责人：{displayName(data, item.ownerId)}</span><time>{isTask(item) ? '最终截止时间' : '目标上线时间'}：{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</time></div></button>)}{!visible.length && <div className="empty-block">当前没有符合条件的事项</div>}</div>

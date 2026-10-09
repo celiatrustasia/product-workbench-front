@@ -2,6 +2,7 @@ import { Tag, Tooltip } from 'antd';
 import type { ReactNode } from 'react';
 import type { Person, Priority, Requirement, Task, WorkbenchData } from '../types';
 import { focusReasons, priorities, priorityNames } from '../utils';
+import { getStatusColor } from '../statusColors';
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return <div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>{!compact && <span className="brand-copy"><strong>产品工作台</strong></span>}</div>;
@@ -16,8 +17,8 @@ export function PeopleGroup({ ids, data }: { ids: string[]; data: WorkbenchData 
 }
 
 export function StatusTag({ status }: { status: string }) {
-  const tone = status === '阻塞' ? 'red' : status === '挂起' ? 'gray' : ['已完成', '已上线', '进行中'].includes(status) ? 'green' : ['设计中', '待处理', '待评估'].includes(status) ? 'amber' : status === '测试中' ? 'violet' : 'blue';
-  return <Tag className={`status-tag ${tone}`}><span className="status-dot" />{status}</Tag>;
+  const color = getStatusColor(status);
+  return <Tag className="status-tag" style={{ color, backgroundColor: `${color}14` }}><span className="status-dot" />{status}</Tag>;
 }
 
 export function PriorityTag({ priority }: { priority: Priority }) {
