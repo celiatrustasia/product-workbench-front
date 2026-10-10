@@ -53,8 +53,6 @@ body{background:var(--page-bg)}
 .focus-table th:nth-child(5),.focus-table td:nth-child(5){width:21%}
 .focus-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
 .focus-metric-card{position:relative;overflow:hidden;width:100%;min-height:152px;padding:18px 20px;text-align:left;background:#fff;border:1px solid var(--surface-border);border-radius:6px;box-shadow:0 2px 8px rgba(32,61,102,.05);cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
-.focus-metric-card:before{content:"";position:absolute;top:0;left:0;width:100%;height:3px;background:#3f73dc}
-.focus-metric-card.task:before{background:#2d9b78}
 .focus-metric-card:hover{border-color:#aec3e9;box-shadow:0 7px 18px rgba(32,61,102,.1);transform:translateY(-1px)}
 .focus-metric-header{display:flex;align-items:center;gap:11px;margin-bottom:15px}
 .focus-metric-icon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:6px;background:#e7efff;color:#2f66d3;font-size:18px}
@@ -168,9 +166,8 @@ body{background:var(--page-bg)}
 .interactive-donut>span{inset:41px;background:none;box-shadow:none;pointer-events:none}
 .interactive-donut strong{font-size:27px}
 .interactive-donut small{white-space:nowrap;line-height:1.15;margin-top:4px}
-.donut-segment{cursor:pointer;stroke:#fff;stroke-width:1;transition:transform .16s ease,filter .16s ease,opacity .16s ease;outline:none}
+.donut-segment{cursor:pointer;stroke:#fff;stroke-width:1;transition:transform .16s ease,filter .16s ease;outline:none}
 .donut-segment.is-active{filter:brightness(1.12) drop-shadow(0 0 3px var(--segment-glow)) drop-shadow(0 0 7px var(--segment-glow));stroke-width:2}
-.donut-segment.is-muted{opacity:.58}
 .donut-segment:focus-visible{stroke:#17355f;stroke-width:2}
 .focus-chart-legend>button{display:grid;grid-template-columns:8px minmax(0,1fr) 24px;align-items:center;gap:7px;min-width:0;padding:8px 5px;border:0;border-bottom:1px solid #edf1f6;background:transparent;text-align:left;border-radius:3px;transition:background .16s ease}
 .focus-chart-legend>button.is-active,.focus-chart-legend>button:hover{background:#edf3ff}
