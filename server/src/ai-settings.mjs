@@ -6,9 +6,10 @@ import { z } from 'zod';
 export const aiProviders = {
   deepseek: { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' },
   qwen: { name: '通义千问（阿里云百炼）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  openai: { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
 };
 export const aiSettingsSchema = z.object({
-  provider: z.enum(['deepseek', 'qwen']),
+  provider: z.enum(['deepseek', 'qwen', 'openai']),
   baseUrl: z.string().url().max(300),
   model: z.string().trim().regex(/^[a-zA-Z0-9._:/-]{1,100}$/),
   apiKey: z.string().trim().min(8).max(4096).regex(/^[^\s]+$/),
@@ -18,7 +19,9 @@ export const aiSettingsSchema = z.object({
   const qwen = (['dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com', 'dashscope-us.aliyuncs.com'].includes(url.hostname)
     || /^[a-zA-Z0-9-]+\.(cn-beijing|ap-southeast-1|us-east-1|eu-central-1)\.maas\.aliyuncs\.com$/.test(url.hostname))
     && ['/compatible-mode/v1', '/compatible-mode/v1/'].includes(url.pathname);
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || !(value.provider === 'deepseek' ? deepseek : qwen)) {
+  const openai = url.hostname === 'api.openai.com' && ['/v1', '/v1/'].includes(url.pathname);
+  const allowedEndpoint = { deepseek, qwen, openai }[value.provider];
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || !allowedEndpoint) {
     ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: '请使用所选服务商的官方 HTTPS 接口地址' });
   }
 });

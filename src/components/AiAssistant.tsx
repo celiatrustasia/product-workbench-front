@@ -8,7 +8,7 @@ import { useWorkspace } from '../data/workspace';
 import type { WorkKind } from '../types';
 import { displayName, platformName } from '../utils';
 
-type Provider = 'deepseek' | 'qwen';
+type Provider = 'deepseek' | 'qwen' | 'openai';
 type ModelStatus = {
   configured: boolean; managedByEnvironment: boolean; provider: Provider; model: string; baseUrl: string;
   providers: Record<Provider, { name: string; model: string; baseUrl: string }>;
@@ -29,6 +29,7 @@ export default function AiAssistant() {
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [form] = Form.useForm();
+  const selectedProvider = Form.useWatch('provider', form) as Provider | undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -122,6 +123,7 @@ export default function AiAssistant() {
       {settingsError && <Alert type="error" showIcon title={settingsError} className="ai-settings-notice" />}
       <Form form={form} layout="vertical" requiredMark onFinish={saveSettings} clearOnDestroy disabled={settingsBusy}>
         <Form.Item label="模型服务" name="provider" rules={[{ required: true }]}><Select options={status ? Object.entries(status.providers).map(([value, provider]) => ({ value, label: provider.name })) : []} onChange={(value: Provider) => { if (status) form.setFieldsValue({ ...status.providers[value], apiKey: '' }); }} /></Form.Item>
+        {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="使用 OpenAI 平台 API Key" description={<span>ChatGPT / Codex 会员额度不用于此处，API 调用单独计费。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">创建 API Key</a></span>} />}
         <Form.Item label="模型名称" name="model" rules={[{ required: true, message: '请输入模型名称' }, { max: 100 }]}><Input /></Form.Item>
         <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商官方接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input /></Form.Item>
         <Form.Item label="API Key" name="apiKey" dependencies={['provider']} extra={status?.configured ? '使用同一服务商时，留空可保留已保存的 Key。' : undefined} rules={[({ getFieldValue }) => ({ validator: (_, value) => value?.trim() || status?.configured && getFieldValue('provider') === status.provider ? Promise.resolve() : Promise.reject(new Error('请输入模型服务的 API Key')) })]}><Input.Password autoComplete="off" placeholder="粘贴服务商生成的 Key" /></Form.Item>

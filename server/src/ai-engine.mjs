@@ -24,13 +24,17 @@ export const assistantPlanSchema = z.object({
 
 export async function completeJson(settings, messages, fetcher = fetch) {
   const validated = aiSettingsSchema.parse(settings);
+  const openai = validated.provider === 'openai';
+  const body = openai
+    ? { model: validated.model, input: messages, text: { format: { type: 'json_object' } }, store: false, stream: false, max_output_tokens: 4096 }
+    : { model: validated.model, messages, response_format: { type: 'json_object' }, stream: false, max_tokens: 4096,
+      ...(validated.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : { enable_thinking: false }) };
   let response;
   try {
-    response = await fetcher(`${validated.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    response = await fetcher(`${validated.baseUrl.replace(/\/$/, '')}/${openai ? 'responses' : 'chat/completions'}`, {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(35000),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${validated.apiKey}` },
-      body: JSON.stringify({ model: validated.model, messages, response_format: { type: 'json_object' }, stream: false, max_tokens: 4096,
-        ...(validated.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : { enable_thinking: false }) }),
+      body: JSON.stringify(body),
     });
   } catch {
     throw Object.assign(new Error('模型连接超时或不可用，本次未创建事项，可以重试'), { status: 503, code: 'AI_UNAVAILABLE' });
@@ -43,6 +47,12 @@ export async function completeJson(settings, messages, fetcher = fetch) {
   }
   try {
     const result = await response.json();
+    if (openai) {
+      if (result.status !== 'completed') throw new Error('incomplete');
+      const content = result.output.filter(item => item.type === 'message' && item.role === 'assistant').flatMap(item => item.content);
+      if (content.some(item => item.type === 'refusal')) throw new Error('refused');
+      return JSON.parse(content.filter(item => item.type === 'output_text').map(item => item.text).join(''));
+    }
     if (result.choices?.[0]?.finish_reason === 'length') throw new Error('truncated');
     return JSON.parse(result.choices[0].message.content);
   } catch {
