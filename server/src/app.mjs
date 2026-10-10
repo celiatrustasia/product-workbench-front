@@ -14,13 +14,14 @@ import { authenticate, requireAdmin, requireChangedPassword, originGuard, login,
 import { saveWork, findWork, hydrateWorks, archiveWork, deleteWork, milestone, fileView } from './works.mjs';
 import { saveSetting, deleteSetting, reorder, resetPassword, settingsLock } from './management.mjs';
 import { orderSchema, dictionarySchema } from './validation.mjs';
+import { registerAssistant } from './assistant.mjs';
 
 const iso = value => value?.replace(' ', 'T');
 const workKind = value => { assert(['requirement','task'].includes(value),400,'事项类型无效'); return value; };
 const notices = async userId => (await rows('SELECT * FROM wb_notices WHERE recipient_id=? ORDER BY created_at DESC,id DESC LIMIT 2000',[userId])).map(item=>({id:item.id,kind:item.kind,workId:item.work_id,title:item.title,text:item.text,level:item.level,createdAt:iso(item.created_at),read:Boolean(item.read_at),readByIds:item.read_at ? [userId] : [],recipientIds:[userId]}));
 const fileUpload = multer({ storage:multer.memoryStorage(), limits:{fileSize:1024*1024,files:1,fields:0,parts:1} }).single('file');
 
-export function createApp() {
+export function createApp(options = {}) {
   const app=express();
   app.disable('x-powered-by');
   // Only the local reverse proxy may supply the client address.
@@ -35,6 +36,7 @@ export function createApp() {
   app.post('/api/auth/logout',logout);
   app.post('/api/auth/password',changePassword);
   app.use('/api',requireChangedPassword);
+  registerAssistant(app, options);
 
   app.get('/api/workspace',async (req,res)=>{
     const people=(await rows('SELECT * FROM wb_users WHERE deleted_at IS NULL ORDER BY created_at,id')).map(publicUser);
@@ -56,12 +58,11 @@ export function createApp() {
     if(query.statuses){const statuses=query.statuses.split(',');assert(statuses.length<=5,400,'状态过多');predicates.push(`status IN (${statuses.map(()=>'?').join(',')})`);values.push(...statuses);}
     for(const [field,column] of [['platformId','platform_id'],['priority','priority'],['ownerId','owner_id']])if(query[field]){predicates.push(`${column}=?`);values.push(query[field]);}
     if(query.focus){
-      const week="BETWEEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) AND DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY)";
-      const exactFocus=`(archived=0 AND (manual_focus=1 OR (status NOT IN ('已完成','已上线','挂起') AND (DATE(due_at) < CURDATE() OR DATE(due_at) ${week} OR (kind='task' AND DATE(started_at) ${week}) OR EXISTS (SELECT 1 FROM JSON_TABLE(COALESCE(JSON_EXTRACT(document,'$.milestones'),JSON_ARRAY()), '$[*]' COLUMNS (planned_at VARCHAR(40) PATH '$.plannedAt', completed_at VARCHAR(40) PATH '$.completedAt' NULL ON EMPTY)) m WHERE m.completed_at IS NULL AND (DATE(m.planned_at)<CURDATE() OR DATE(m.planned_at) ${week}))))))`;
+      const exactFocus='(archived=0 AND manual_focus=1)';
       predicates.push(query.focus==='yes' ? `COALESCE(${exactFocus},0)` : `NOT COALESCE(${exactFocus},0)`);
     }
     const where=predicates.join(' AND ');const [count]=await rows(`SELECT COUNT(*) AS total FROM wb_works WHERE ${where}`,values);
-    const records=await rows(`SELECT * FROM wb_works WHERE ${where} ORDER BY updated_at DESC,id DESC LIMIT ${query.pageSize} OFFSET ${(query.page-1)*query.pageSize}`,values);
+    const records=await rows(`SELECT * FROM wb_works WHERE ${where} ORDER BY CAST(SUBSTRING(code,2) AS UNSIGNED) DESC,priority ASC,CASE status WHEN '待评估' THEN 0 WHEN '待处理' THEN 0 WHEN '设计中' THEN 1 WHEN '进行中' THEN 1 WHEN '研发中' THEN 2 WHEN '阻塞' THEN 2 WHEN '测试中' THEN 3 WHEN '挂起' THEN 3 ELSE 4 END,manual_focus DESC,id LIMIT ${query.pageSize} OFFSET ${(query.page-1)*query.pageSize}`,values);
     res.json({items:await hydrateWorks(records),total:count.total,page:query.page,pageSize:query.pageSize});
   });
   app.get('/api/works/:kind/:id',async(req,res)=>res.json(await findWork(workKind(req.params.kind),req.params.id)));
@@ -120,7 +121,7 @@ export function createApp() {
     else if(error instanceof multer.MulterError){status=413;code='UPLOAD_LIMIT';message='文件超过限制：单个文件最多 1 MB';}
     else if(error.code==='ER_DUP_ENTRY'){status=409;code='DUPLICATE';message='名称或用户名已存在';}
     else if(error.code==='ER_ROW_IS_REFERENCED_2'){status=409;code='REFERENCED';message='记录仍被引用，请使用停用功能';}
-    if(status>=500){console.error('API error:',error.code || error.name);message='服务暂时不可用，请稍后重试';code='INTERNAL_ERROR';}
+    if(status>=500){console.error('API error:',error.code || error.name);if(!['AI_NOT_CONFIGURED','AI_UNAVAILABLE'].includes(code)){message='服务暂时不可用，请稍后重试';code='INTERNAL_ERROR';}}
     res.status(status).json({error:{code,message}});
   });
   return app;

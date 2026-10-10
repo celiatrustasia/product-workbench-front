@@ -28,6 +28,8 @@ test('Shanghai dates, participant deduplication and deadline validation',()=>{
 test('reminders cover overdue, today, three days, milestones and ignore completed work',()=>{
   const task={id:'t',code:'T00001',title:'task',status:'进行中',dueAt:'2026-10-02T17:00:00',milestones:[]};
   assert.equal(reminderFor(task,'2026-09-29').level,'warning');
+  assert.equal(reminderFor(task,'2026-09-30'),undefined);
+  assert.equal(reminderFor(task,'2026-10-01'),undefined);
   assert.equal(reminderFor(task,'2026-10-03').level,'danger');
   assert.equal(reminderFor({...task,status:'已完成'},'2026-10-03'),undefined);
   assert.match(reminderFor({...task,milestones:[{name:'评审',plannedAt:'2026-09-29T10:00:00'}]},'2026-09-29').text,/里程碑/);

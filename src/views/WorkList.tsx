@@ -6,9 +6,9 @@ import { AppstoreOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlusOutli
 import { useWorkspace } from '../data/workspace';
 import WorkForm from '../components/WorkForm';
 import WeeklyFocusSwitch from '../components/WeeklyFocusSwitch';
-import { FocusTags, PageHeading, PeopleGroup, PriorityTag, StatusTag } from '../components/ui';
+import { FocusTags, PageHeading, PeopleGroup, PriorityLabel, PriorityTag, StatusLabel, StatusTag } from '../components/ui';
 import type { Requirement, Task, WorkKind } from '../types';
-import { canEditAll, dueLabel, focusReasons, formatDate, platformName, priorityNames, requirementStatuses, taskStatuses, workCode } from '../utils';
+import { canEditAll, compareWorkDefault, dateCellHint, dueLabel, focusReasons, formatDate, platformName, priorityNames, requirementStatuses, taskStatuses, workCode } from '../utils';
 
 type Work = Requirement | Task;
 export default function WorkList({ kind }: { kind: WorkKind }) {
@@ -25,7 +25,6 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
   const [participant, setParticipant] = useState('');
   const [requirement, setRequirement] = useState(params.get('requirement') || '');
   const [moreFilters, setMoreFilters] = useState(Boolean(params.get('requirement')));
-  const [focus, setFocus] = useState('');
   const [weekly, setWeekly] = useState(params.get('weekly') || '');
   const [archive, setArchive] = useState('active');
   const [page, setPage] = useState(1);
@@ -45,12 +44,11 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
     if (status.length && !status.includes(item.status) || platform && item.platformId !== platform || priority && item.priority !== priority || owner && item.ownerId !== owner) return false;
     if (participant && !item.participantIds.includes(participant)) return false;
     if (task && requirement && (item as Task).requirementId !== requirement) return false;
-    if (focus && !focusReasons(item).includes(focus)) return false;
     if (weekly && (focusReasons(item).length > 0) !== (weekly === 'yes')) return false;
     return true;
-  }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [items, archive, search, status, platform, priority, owner, participant, focus, weekly, task, requirement]);
-  const reset = () => { setSearch(''); setStatus([]); setPlatform(''); setPriority(''); setOwner(''); setParticipant(''); setRequirement(''); setFocus(''); setWeekly(''); setArchive('active'); setPage(1); setParams({}); };
-  const advancedCount = Number(Boolean(priority)) + Number(Boolean(focus)) + Number(task && Boolean(requirement));
+  }).sort(compareWorkDefault), [items, archive, search, status, platform, priority, owner, participant, weekly, task, requirement]);
+  const reset = () => { setSearch(''); setStatus([]); setPlatform(''); setPriority(''); setOwner(''); setParticipant(''); setRequirement(''); setWeekly(''); setArchive('active'); setPage(1); setParams({}); };
+  const advancedCount = Number(Boolean(priority)) + Number(task && Boolean(requirement));
   const peopleOptions = data.people.map(item => ({ value: item.id, label: item.name }));
   const linkedTasks = useMemo(() => {
     const counts = new Map<string, number>();
@@ -70,13 +68,13 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
     modal.confirm({ title: `确认删除${task ? '任务' : '需求'}“${item.title}”？`, content: linkedCount ? `删除后无法恢复，${linkedCount} 个关联任务将保留，但会解除需求关联。` : '删除后从列表移除，操作记录在服务端保留。', okText: '确认删除', okButtonProps: { danger: true }, onOk: async () => { await deleteWork(kind, item.id); message.success(`${task ? '任务' : '需求'}已删除`); } });
   };
   const columns: TableColumnsType<Work> = [
-    { title: task ? '事项' : '需求', dataIndex: 'title', width: 210, render: (_, item) => <div className="list-title"><strong>{item.title}</strong><small>{workCode(item)}{task && (item as Task).requirementId && <span> · 关联需求</span>}</small></div>, sorter: (a, b) => a.title.localeCompare(b.title) },
+    { title: task ? '事项' : '需求', dataIndex: 'title', width: 210, render: (_, item) => <div className="list-title"><strong>{item.title}</strong><small>{workCode(item)}{task && (item as Task).requirementId && <span> · 关联需求</span>}</small></div>, sorter: (a, b) => workCode(a).localeCompare(workCode(b), undefined, { numeric: true }), sortDirections: ['descend', 'ascend'] },
     { title: '平台', dataIndex: 'platformId', width: 100, render: value => platformName(data, value) },
     { title: '状态', dataIndex: 'status', width: 100, render: value => <StatusTag status={value} /> },
     { title: '优先级', dataIndex: 'priority', width: 80, render: value => <PriorityTag priority={value} />, sorter: (a, b) => a.priority.localeCompare(b.priority) },
     { title: '负责人', dataIndex: 'ownerId', width: 110, render: value => <PeopleGroup ids={value ? [value] : []} data={data} /> },
     { title: '参与人', dataIndex: 'participantIds', width: 112, render: (ids: string[]) => ids.length ? <PeopleGroup ids={ids} data={data} /> : <span className="muted">—</span> },
-    { title: task ? '最终截止时间' : '目标上线时间', width: 132, render: (_, item) => <span className={dueLabel(item).includes('逾期') ? 'danger-text' : ''}>{formatDate(task ? (item as Task).dueAt : (item as Requirement).targetAt)}<small className="cell-sub">{dueLabel(item)}</small></span> },
+    { title: task ? '最终截止时间' : '目标上线时间', width: 132, render: (_, item) => { const hint = dateCellHint(item); return <span className={hint?.includes('逾期') ? 'danger-text' : ''}>{formatDate(task ? (item as Task).dueAt : (item as Requirement).targetAt)}{hint && <small className="cell-sub">{hint}</small>}</span>; } },
     { title: task ? '关联需求数' : '关联任务数', width: 100, align: 'center', fixed: 'right', render: (_, item) => relatedLink(item) },
     { title: '重点关注', width: 124, fixed: 'right', render: (_, item) => <WeeklyFocusSwitch kind={kind} item={item} /> },
     { title: '操作', width: 146, fixed: 'right', render: (_, item) => <span className="table-actions">{canEditAll(item, user?.id, isAdmin) && <Button size="small" type="link" icon={<EditOutlined />} onClick={event => { event.stopPropagation(); edit(item); }}>编辑</Button>}{isAdmin && <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={event => { event.stopPropagation(); remove(item); }}>删除</Button>}</span> },
@@ -89,15 +87,14 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
     <div className="list-toolbar"><div className="list-toolbar-left"><Segmented value={view} onChange={value => setView(value as '表格' | '看板')} options={[{ value: '表格', label: <><UnorderedListOutlined /> 表格</> }, { value: '看板', label: <><AppstoreOutlined /> 看板</> }]} /><span className="list-count">共 {filtered.length} 项</span></div>{(archive === 'archived' || items.some(item => item.archived)) && <Button type="link" onClick={() => { setArchive(archive === 'active' ? 'archived' : 'active'); setPage(1); }}>{archive === 'archived' ? '返回正常列表' : `已归档（${items.filter(item => item.archived).length}）`}</Button>}</div>
     <div className="filter-bar">
       <div className="filter-field filter-keyword"><label htmlFor="filter-keyword">关键词</label><Input id="filter-keyword" prefix={<SearchOutlined />} placeholder={`搜索${task ? '任务' : '需求'}名称或编号`} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="filter-search" allowClear /></div>
-      <div className="filter-field"><label htmlFor="filter-status">状态</label><Select id="filter-status" mode="multiple" maxTagCount={0} maxTagPlaceholder={() => status.length === 1 ? status[0] : `已选 ${status.length} 项`} value={status} placeholder="全部" allowClear onChange={value => { setStatus(value); setPage(1); }} options={statuses.map(value => ({ value, label: value }))} /></div>
+      <div className="filter-field"><label htmlFor="filter-status">状态</label><Select id="filter-status" mode="multiple" maxTagCount={0} maxTagPlaceholder={() => status.length === 1 ? <StatusLabel status={status[0]} /> : `已选 ${status.length} 项`} value={status} placeholder="全部" allowClear onChange={value => { setStatus(value); setPage(1); }} options={statuses.map(value => ({ value, label: value }))} optionRender={option => <StatusLabel status={String(option.value)} />} /></div>
       <div className="filter-field"><label htmlFor="filter-platform">平台</label><Select id="filter-platform" value={platform || undefined} placeholder="全部" allowClear onChange={value => { setPlatform(value || ''); setPage(1); }} options={[...data.platforms].sort((a, b) => a.sort - b.sort).map(item => ({ value: item.id, label: item.name }))} /></div>
       <div className="filter-field"><label htmlFor="filter-owner">负责人</label><Select id="filter-owner" value={owner || undefined} placeholder="全部" allowClear showSearch={{ optionFilterProp: 'label' }} onChange={value => { setOwner(value || ''); setPage(1); }} options={peopleOptions} /></div>
       <div className="filter-field"><label htmlFor="filter-participant">参与人</label><Select id="filter-participant" value={participant || undefined} placeholder="全部" allowClear showSearch={{ optionFilterProp: 'label' }} onChange={value => { setParticipant(value || ''); setPage(1); }} options={peopleOptions} /></div>
       <div className="filter-field"><label htmlFor="filter-weekly">重点关注</label><Select id="filter-weekly" value={weekly || undefined} placeholder="全部" allowClear onChange={value => { setWeekly(value || ''); setPage(1); }} options={[{ value: 'yes', label: '是' }, { value: 'no', label: '否' }]} /></div>
       <div className="filter-actions"><Button type="text" className={advancedCount ? 'filters-active' : ''} icon={moreFilters ? <UpOutlined /> : <DownOutlined />} aria-expanded={moreFilters} aria-controls="advanced-filters" onClick={() => setMoreFilters(value => !value)}>{moreFilters ? '收起筛选' : '更多筛选'}{advancedCount > 0 && `（${advancedCount}）`}</Button><Button className="filter-reset" type="link" onClick={reset}>重置</Button></div>
       {moreFilters && <div className="filter-advanced" id="advanced-filters">
-        <div className="filter-field"><label htmlFor="filter-priority">优先级</label><Select id="filter-priority" value={priority || undefined} placeholder="全部" allowClear onChange={value => { setPriority(value || ''); setPage(1); }} options={['P1', 'P2', 'P3', 'P4'].map(value => ({ value, label: `${value} · ${priorityNames[value]}` }))} /></div>
-        <div className="filter-field"><label htmlFor="filter-focus">关注来源</label><Select id="filter-focus" value={focus || undefined} placeholder="全部" allowClear onChange={value => { setFocus(value || ''); setPage(1); }} options={[{ value: '手动重点', label: '手动重点' }, { value: '本周节点', label: '时间节点' }]} /></div>
+        <div className="filter-field"><label htmlFor="filter-priority">优先级</label><Select id="filter-priority" value={priority || undefined} placeholder="全部" allowClear onChange={value => { setPriority(value || ''); setPage(1); }} options={['P1', 'P2', 'P3', 'P4'].map(value => ({ value, label: `${value} · ${priorityNames[value]}` }))} optionRender={option => <PriorityLabel priority={String(option.value)} />} labelRender={option => <PriorityLabel priority={String(option.value)} />} /></div>
         {task && <div className="filter-field"><label htmlFor="filter-requirement">关联需求</label><Select id="filter-requirement" value={requirement || undefined} placeholder="全部" allowClear showSearch={{ optionFilterProp: 'label' }} onChange={value => { setRequirement(value || ''); setPage(1); }} options={data.requirements.map(item => ({ value: item.id, label: `${workCode(item)} · ${item.title}${item.archived ? '（已归档）' : ''}` }))} /></div>}
       </div>}
     </div>

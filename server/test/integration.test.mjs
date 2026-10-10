@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,unlink} from 'node:fs/promises';
 import {once} from 'node:events';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
 
 test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:process.env.RUN_MYSQL_TESTS!=='1'},async t=>{
   const testDatabase=`friend_workbench_test_${Date.now()}_${randomBytes(4).toString('hex')}`;
   process.env.MYSQL_DATABASE=testDatabase;
   process.env.BOOTSTRAP_PASSWORD_FILE=`.runtime/${testDatabase}.txt`;
+  process.env.AI_CONFIG_FILE=`.runtime/${testDatabase}-ai.json`;
   const {config}=await import('../src/config.mjs');
   const {migrate}=await import('../src/migrate.mjs');
   const {pool,rows}=await import('../src/db.mjs');
@@ -15,9 +16,11 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
   const {runReminders}=await import('../src/reminders.mjs');
   const {stamp}=await import('../src/security.mjs');
   let server;
+  let generationCalls=0;
+  let generate=async()=>({action:'reply',reply:'请告诉我具体平台和任务。',works:[]});
   try {
     await migrate();
-    server=createApp().listen(0,'127.0.0.1');await once(server,'listening');
+    server=createApp({assistantGenerate:async(messages,context)=>{generationCalls++;return generate(messages,context);}}).listen(0,'127.0.0.1');await once(server,'listening');
     const url=`http://127.0.0.1:${server.address().port}/api`;
     const admin={},owner={},participant={},outsider={};
     async function call(client,path,method='GET',body,expected=200,headers={}){
@@ -92,6 +95,12 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       assert.equal(page.total,6);assert.equal(page.items.length,2);
       await call(owner,'/works/requirement','POST',{...requirementBody,title:'无时间未关注需求',manualFocus:false,targetAt:undefined},201);
       const unfocused=await call(owner,'/works/requirement?focus=no');assert.equal(unfocused.total,1);
+      const near=await call(owner,'/works/requirement','POST',{...requirementBody,title:'临期但未手动关注',manualFocus:false},201);
+      const focused=await call(owner,'/works/requirement?focus=yes');
+      assert.equal(focused.total,6);assert.ok(focused.items.every(item=>item.manualFocus));
+      assert.deepEqual(focused.items.map(item=>item.code),[...focused.items.map(item=>item.code)].sort((a,b)=>b.localeCompare(a)));
+      const unfocusedNear=await call(owner,'/works/requirement?focus=no');
+      assert.equal(unfocusedNear.total,2);assert.ok(unfocusedNear.items.some(item=>item.id===near.id));
     });
     await t.test('recipient-only reminders, deduplication and read flags',async()=>{
       await runReminders();await runReminders();
@@ -114,6 +123,46 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       await call(participant,'/workspace','GET',undefined,401);
       await call(participant,'/auth/login','POST',{username:'participant',password:reset.temporaryPassword});await call(participant,'/workspace','GET',undefined,428);
       await call(admin,`/works/task/${task.id}`,'DELETE');
+    });
+    await t.test('assistant settings require admin; batches persist atomically and retries never duplicate',async()=>{
+      const status=await call(admin,'/assistant/config');
+      assert.equal('apiKey' in status,false);
+      await call(owner,'/assistant/config','PUT',{},403);
+      await call({},'/assistant/messages','POST',{requestId:randomUUID(),message:'test'},401);
+      await call(owner,'/assistant/messages','POST',{requestId:randomUUID(),message:'test'},403,{'X-CSRF-Token':'wrong'});
+      generate=async()=>({action:'create',reply:'已按默认值整理，优先级 P2。',works:[
+        {kind:'task',title:'AI 任务',platformId,requirementIndex:1},
+        {kind:'requirement',title:'AI 需求',platformId,ownerId:owner.id},
+      ]});
+      const payload={requestId:randomUUID(),message:'创建需求及关联任务',history:[]};
+      const before=(await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total;
+      const first=await call(owner,'/assistant/messages','POST',payload);
+      assert.equal(first.created.length,2);
+      assert.equal(first.created[0].kind,'task');
+      const createdTask=await call(owner,`/works/task/${first.created[0].id}`);
+      assert.equal(createdTask.requirementId,first.created[1].id);
+      assert.equal(createdTask.createdBy,owner.id);
+      assert.equal(createdTask.ownerId,owner.id);
+      const calls=generationCalls;
+      const repeated=await call(owner,'/assistant/messages','POST',payload);
+      assert.deepEqual(first,repeated);
+      assert.equal(generationCalls,calls);
+      assert.equal((await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total,before+2);
+      await call(owner,'/assistant/messages','POST',{...payload,message:'其他消息'},409);
+      generate=async()=>({action:'create',reply:'create',works:[{kind:'task',title:'invalid',platformId:'unknown'}]});
+      const incomplete=await call(owner,'/assistant/messages','POST',{requestId:randomUUID(),message:'信息不全'});
+      assert.equal(incomplete.created.length,0);
+      assert.match(incomplete.reply,/平台/);
+      const temporary=await call(admin,'/platforms','POST',{name:'AI rollback platform',active:true},201);
+      const temporaryId=temporary.id;
+      generate=async()=>{
+        await rows('UPDATE wb_platforms SET active=0 WHERE id=?',[temporaryId]);
+        return {action:'create',reply:'create',works:[{kind:'requirement',title:'rollback first',platformId},{kind:'task',title:'rollback second',platformId:temporaryId}]};
+      };
+      const sequences=await rows("SELECT kind,next_value FROM wb_sequences WHERE kind IN ('requirement','task') ORDER BY kind");
+      await call(owner,'/assistant/messages','POST',{requestId:randomUUID(),message:'模拟平台在处理过程中停用'},400);
+      assert.equal((await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total,before+2);
+      assert.deepEqual(await rows("SELECT kind,next_value FROM wb_sequences WHERE kind IN ('requirement','task') ORDER BY kind"),sequences);
     });
   } finally {
     if(server)await new Promise(resolve=>server.close(resolve));

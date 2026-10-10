@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -8,8 +8,10 @@ import { hashPassword, stamp } from './security.mjs';
 
 export async function migrate() {
   await createDatabase();
-  const sql = await readFile(resolve(serverRoot, 'migrations/001-initial.sql'), 'utf8');
-  for (const statement of sql.split(';').map(value => value.trim()).filter(Boolean)) await pool.query(statement);
+  for (const file of (await readdir(resolve(serverRoot, 'migrations'))).filter(name => /^\d+-[a-z-]+\.sql$/.test(name)).sort()) {
+    const sql = await readFile(resolve(serverRoot, 'migrations', file), 'utf8');
+    for (const statement of sql.split(';').map(value => value.trim()).filter(Boolean)) await pool.query(statement);
+  }
   await transaction(async connection => {
     await rows("SELECT next_value FROM wb_sequences WHERE kind='admin-lock' FOR UPDATE", [], connection);
     const existing = await rows('SELECT id FROM wb_users LIMIT 1', [], connection);

@@ -46,6 +46,7 @@ interface WorkspaceContextValue {
   markNotice: (id?: string) => void | Promise<void>;
   addNotice: (value: Omit<Notice, 'id' | 'createdAt' | 'read'>) => void;
   resetPreview: () => void;
+  refreshWorkspace: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -171,7 +172,7 @@ function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(DATA_KEY, JSON.stringify(seed));
   }, []);
 
-  return <WorkspaceContext.Provider value={{ data, user, isPreview: true, changePassword: async () => { throw new Error('预览模式不支持修改密码'); }, resetPersonPassword: async () => ({ temporaryPassword: 'demo1234' }), signIn, signOut, saveWork, archiveWork, updateMilestone, savePlatform, reorderPlatforms, deletePlatform, savePerson, deletePerson, saveDictionary, reorderDictionary, deleteDictionary, deleteWork, markNotice, addNotice, resetPreview }}>{children}</WorkspaceContext.Provider>;
+  return <WorkspaceContext.Provider value={{ data, user, isPreview: true, refreshWorkspace: async () => {}, changePassword: async () => { throw new Error('预览模式不支持修改密码'); }, resetPersonPassword: async () => ({ temporaryPassword: 'demo1234' }), signIn, signOut, saveWork, archiveWork, updateMilestone, savePlatform, reorderPlatforms, deletePlatform, savePerson, deletePerson, saveDictionary, reorderDictionary, deleteDictionary, deleteWork, markNotice, addNotice, resetPreview }}>{children}</WorkspaceContext.Provider>;
 }
 
 const emptyData = (): WorkbenchData => ({ people: [], platforms: [], dictionary: [], requirements: [], tasks: [], notices: [], activities: [] });
@@ -223,7 +224,7 @@ function ApiWorkspaceProvider({ children }: { children: ReactNode }) {
     const existing = dataRef.current[kind === 'dictionaries' ? 'dictionary' : kind].some(item => item.id === value.id);
     return mutate<{ temporaryPassword?: string }>(`/${kind}${existing ? `/${value.id}` : ''}`, existing ? 'PUT' : 'POST', value);
   };
-  return <WorkspaceContext.Provider value={{ data, user, isPreview: false, loading, error, retry: () => { void boot(); },
+  return <WorkspaceContext.Provider value={{ data, user, isPreview: false, loading, error, refreshWorkspace: refresh, retry: () => { void boot(); },
     signIn: async (username, password) => { const session = await request<{ user: Person; csrf: string }>('/auth/login', 'POST', { username, password }); sessionVersion.current++; setCsrf(session.csrf); setUser(session.user); if (!session.user.mustChangePassword) await refresh(); return true; },
     signOut: async () => { await request('/auth/logout', 'POST'); sessionVersion.current++; setCsrf(''); setUser(undefined); dataRef.current = emptyData(); setData(emptyData()); },
     changePassword: async (oldPassword, newPassword) => { await request('/auth/password', 'POST', { oldPassword, newPassword }); setUser(current => current ? { ...current, mustChangePassword: false } : current); await refresh(); },

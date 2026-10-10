@@ -14,6 +14,8 @@
 
 `GET /works/:kind`：返回 `{ items, total, page, pageSize }`，kind 为 `requirement` 或 `task`。支持 `page`、`pageSize`（最多 100）、`search`、`statuses`（逗号分隔）、`platformId`、`priority`、`ownerId`、`archived=true|false|all`、`focus=yes|no`。
 
+`focus` 只按未归档事项的 `manualFocus` 判断，不自动包含临期、逾期或本周时间节点。默认按编号降序、优先级升序、状态阶段升序、手动关注优先排列。
+
 `GET /works/:kind/:id` 查询详情；`POST /works/:kind` 创建；`PUT /works/:kind/:id` 保存完整可编辑字段；更新需携带当前 `revision`，冲突时返回 `VERSION_CONFLICT`，不可无提示覆盖。
 
 公共字段：`title`、`platformId`、`ownerId`、`priority`、`status` 必填；`description`、`participantIds`、`note`、`manualFocus`、`source`、`attachments`、`descriptionImages` 可选。附件数组用 `{ id }` 引用已上传文件。ID、R/T 编号、创建人/时间、更新人/时间及完成时间由服务端生成或维护。
@@ -43,3 +45,11 @@
 `GET /notices` 返回当前成员提醒。`PATCH /notices/:id/read` 标记单条，`PATCH /notices/read` 全部已读，只更新当前成员。
 
 `GET /audit` 仅管理员，查看最近 500 条安全审计。`GET /health` 不需要登录，用于可用性检查。
+
+## AI 助手
+
+- `GET /api/assistant/config`：读取是否已配置、服务商及模型信息；所有登录成员可用，不返回 Key。
+- `PUT /api/assistant/config`：管理员设置 `{provider, model, baseUrl, apiKey}`，调用模型测试连接后保存。Key 留空时仅允许保留同一服务商原有 Key；环境变量配置模式为只读。
+- `POST /api/assistant/messages`：提交 `{requestId, message, history}`。`requestId` 为 UUID，消息最多 4000 字，history 最多 12 条 `{role:"user"|"assistant",content}`。返回 `{reply,created:[{kind,id,code,title,status,priority,platformId,ownerId,participantIds,manualFocus,dueAt}]}`。
+
+所有接口沿用会话与 CSRF 校验。创建结果在同一 MySQL 事务中保存，缺少目录字段时返回追问及空 created 数组。同一成员重复提交相同 UUID 和消息返回原结果；同 UUID 修改消息返回 409，仍在处理中返回 409 `AI_PENDING`，未配置返回 503 `AI_NOT_CONFIGURED`。每位成员每分钟最多 10 次创建或配置请求。

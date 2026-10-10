@@ -14,6 +14,7 @@ import WorkList from './views/WorkList';
 import WorkDetail from './views/WorkDetail';
 import Notifications from './views/Notifications';
 import Management from './views/Management';
+import AiAssistant from './components/AiAssistant';
 import { getBreadcrumbItems, managementNavigation, managementParent, primaryNavigation } from './navigation';
 
 const primaryNav = primaryNavigation.map(item => ({ ...item, icon: {
@@ -99,5 +100,5 @@ export default function Root() {
   if (loading) return <main className="account-page"><Spin size="large" /></main>;
   if (error && !user) return <main className="account-page"><section className="account-form"><Brand /><Alert type="error" title="后端服务连接失败" description={error} /><Button onClick={retry}>重新连接</Button></section></main>;
   if (user?.mustChangePassword) return <main className="account-page"><PasswordPanel initial /></main>;
-  return <Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>;
+  return <><Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>{user && <AiAssistant key={user.id} />}</>;
 }

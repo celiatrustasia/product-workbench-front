@@ -13,7 +13,7 @@ function loadModule(path) {
 }
 
 const { migrateWorkCodes, makeWorkCode, reorderItems } = loadModule('../src/data/migrate.ts');
-const { focusReasons, focusedItemsForScope, dueItems, formatDate, workCode, weekBounds, dueListPageSize } = loadModule('../src/utils.ts');
+const { focusReasons, focusedItemsForScope, dueItems, formatDate, workCode, weekBounds, dueListPageSize, compareWorkDefault, dateCellHint } = loadModule('../src/utils.ts');
 const { getBreadcrumbItems, primaryNavigation, managementNavigation } = loadModule('../src/navigation.ts');
 const fixture = () => ({
   requirements: [{ id: 'REQ-old-001', title: 'Existing requirement', attachments: [{ id: 'file', dataUrl: 'data:text/plain;base64,dGVzdA==' }] }, { id: 'REQ-old-002' }],
@@ -57,12 +57,31 @@ test('drag ordering does not drop omitted items or duplicate records', () => {
   assert.deepEqual(items.map(item => item.sort), [1, 2, 3]);
 });
 
-test('weekly focus includes both manual and automatic inclusion', () => {
+test('focus is manual only regardless of near deadlines, milestones or completion', () => {
   const item = { archived: false, manualFocus: false, status: '设计中', targetAt: weekBounds().start.add(2, 'day').format('YYYY-MM-DD') };
-  assert.deepEqual(focusReasons(item), ['本周节点']);
-  assert.deepEqual(focusReasons({ ...item, manualFocus: true }), ['手动重点', '本周节点']);
+  assert.deepEqual(focusReasons(item), []);
+  assert.deepEqual(focusReasons({ ...item, manualFocus: true }), ['手动重点']);
   assert.deepEqual(focusReasons({ ...item, status: '已上线' }), []);
+  assert.deepEqual(focusReasons({ ...item, status: '已上线', manualFocus: true }), ['手动重点']);
+  assert.deepEqual(focusReasons({ ...item, milestones: [{ plannedAt: item.targetAt }], status: '进行中', dueAt: item.targetAt }), []);
   assert.deepEqual(focusReasons({ ...item, archived: true, manualFocus: true }), []);
+});
+
+test('default work sorting applies number, priority, stage and manual focus in order', () => {
+  const base = { id: 'one', code: 'R00009', priority: 'P2', status: '设计中', manualFocus: false };
+  assert.ok(compareWorkDefault({ ...base, code: 'R00010', priority: 'P4', status: '已上线' }, base) < 0);
+  assert.ok(compareWorkDefault({ ...base, priority: 'P1', status: '已上线' }, base) < 0);
+  assert.ok(compareWorkDefault(base, { ...base, status: '已上线', manualFocus: true }) < 0);
+  assert.ok(compareWorkDefault({ ...base, manualFocus: true }, base) < 0);
+  assert.ok(compareWorkDefault({ ...base, code: 'T00001', status: '挂起' }, { ...base, code: 'T00001', status: '已完成' }) < 0);
+});
+
+test('date cells omit missing and completed hints but retain active countdowns', () => {
+  const base = { status: '设计中', targetAt: undefined };
+  assert.equal(dateCellHint(base), undefined);
+  assert.equal(dateCellHint({ status: '挂起', milestones: [] }), undefined);
+  assert.equal(dateCellHint({ ...base, status: '已上线', targetAt: '2026-09-30T17:00:00' }), undefined);
+  assert.equal(dateCellHint({ ...base, targetAt: new Date(Date.now() + 4 * 86400000).toISOString() }), '4 天后');
 });
 
 test('personal dashboard scopes only include focused requirements and tasks', () => {

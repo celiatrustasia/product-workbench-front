@@ -8,6 +8,14 @@ export const priorityNames: Record<string, string> = { P1: '重要紧急', P2: '
 
 export const formatDate = (date?: string, withTime = false) => date ? dayjs(date).format(withTime ? 'YYYY/MM/DD HH:mm' : 'YYYY/MM/DD') : '—';
 export const workCode = (item: WorkBase) => item.code || item.id;
+export function compareWorkDefault(a: Requirement | Task, b: Requirement | Task) {
+  const number = (item: WorkBase) => Number(/^[RT](\d+)$/.exec(workCode(item))?.[1] || 0);
+  const stages: Record<string, number> = { 待评估: 0, 待处理: 0, 设计中: 1, 进行中: 1, 研发中: 2, 阻塞: 2, 测试中: 3, 挂起: 3, 已上线: 4, 已完成: 4 };
+  return number(b) - number(a) || a.priority.localeCompare(b.priority)
+    || (stages[a.status] ?? 99) - (stages[b.status] ?? 99)
+    || Number(Boolean(focusReasons(b).length)) - Number(Boolean(focusReasons(a).length))
+    || a.id.localeCompare(b.id);
+}
 export const formatLongDate = (date?: string) => date ? dayjs(date).format('YYYY年M月D日') : '—';
 export const daysUntil = (date?: string) => date ? dayjs(date).startOf('day').diff(dayjs().startOf('day'), 'day') : null;
 
@@ -50,16 +58,7 @@ export function isComplete(item: Requirement | Task): boolean {
 }
 
 export function focusReasons(item: Requirement | Task): string[] {
-  if (item.archived) return [];
-  const reasons = item.manualFocus ? ['手动重点'] : [];
-  if ('milestones' in item) {
-    const active = item.status !== '已完成' && item.status !== '挂起';
-    const dates = [item.startedAt, item.dueAt, ...item.milestones.filter(m => !m.completedAt).map(m => m.plannedAt)];
-    if (active && (dates.some(isThisWeek) || [item.dueAt, ...item.milestones.filter(m => !m.completedAt).map(m => m.plannedAt)].some(date => daysUntil(date) !== null && daysUntil(date)! < 0))) reasons.push('本周节点');
-  } else if (item.status !== '已上线' && (isThisWeek(item.targetAt) || (daysUntil(item.targetAt) !== null && daysUntil(item.targetAt)! < 0))) {
-    reasons.push('本周节点');
-  }
-  return reasons;
+  return !item.archived && item.manualFocus ? ['手动重点'] : [];
 }
 
 export function dueDate(item: Requirement | Task): string | undefined {
@@ -75,6 +74,10 @@ export function dueLabel(item: Requirement | Task) {
   if (days === 0) return '今天到期';
   if (days === 1) return '明天到期';
   return `${days} 天后`;
+}
+
+export function dateCellHint(item: Requirement | Task) {
+  return dueDate(item) && !isComplete(item) ? dueLabel(item) : undefined;
 }
 
 export function dueItems(data: WorkbenchData) {

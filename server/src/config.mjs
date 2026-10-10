@@ -16,5 +16,6 @@ export const config = {
   bootstrapUsername: env.BOOTSTRAP_USERNAME || 'celia', bootstrapName: env.BOOTSTRAP_NAME || 'Celia Wang',
   bootstrapPasswordFile: resolve(serverRoot, env.BOOTSTRAP_PASSWORD_FILE || '.runtime/bootstrap-admin.txt'),
   staticDir: env.STATIC_DIR ? resolve(serverRoot, env.STATIC_DIR) : undefined,
+  aiConfigFile: resolve(serverRoot, env.AI_CONFIG_FILE || '.runtime/ai-config.json'),
 };
 if (!config.mysql.password) throw new Error('Configure MYSQL_PASSWORD_FILE or MYSQL_PASSWORD');

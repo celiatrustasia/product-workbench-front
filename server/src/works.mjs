@@ -57,10 +57,10 @@ async function bindFiles(connection, user, workId, value) {
   }
   await rows(`DELETE FROM wb_files WHERE work_id=?${all.length ? ` AND id NOT IN (${placeholders(all)})` : ''}`, [workId, ...all], connection);
 }
-export async function saveWork(user, kind, raw, id) {
+export async function saveWork(user, kind, raw, id, sharedConnection) {
   assert(['requirement','task'].includes(kind), 400, '事项类型无效');
   const parsed = normalizeDocument((kind === 'task' ? taskSchema : requirementSchema).parse(raw));
-  return transaction(async connection => {
+  const save = async connection => {
     await rows("SELECT next_value FROM wb_sequences WHERE kind='settings-lock' FOR UPDATE", [], connection);
     const existing = id ? await findWork(kind, id, connection, true) : undefined;
     if (existing) {
@@ -98,7 +98,8 @@ export async function saveWork(user, kind, raw, id) {
     const targets = [value.ownerId, ...value.participantIds, existing?.ownerId, ...(existing?.participantIds || [])].filter(person => person !== user.id);
     await notify(connection, kind, saved, targets, existing ? '事项信息已更新' : '新事项已分派', `${code} · ${value.title}${existing ? '的信息或分派已更新。' : '已分派给你。'}`);
     return saved;
-  });
+  };
+  return sharedConnection ? save(sharedConnection) : transaction(save);
 }
 export async function archiveWork(user, kind, id, archived) {
   assert(isAdmin(user), 403, '仅管理员可归档或恢复事项');

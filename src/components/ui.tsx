@@ -21,16 +21,25 @@ export function StatusTag({ status }: { status: string }) {
   return <Tag className="status-tag" style={{ color, backgroundColor: `${color}14` }}><span className="status-dot" />{status}</Tag>;
 }
 
+export function StatusLabel({ status }: { status: string }) {
+  return <span className="select-tone-label" style={{ color: getStatusColor(status) }}><i aria-hidden="true" />{status}</span>;
+}
+
+export function PriorityLabel({ priority }: { priority: string }) {
+  const color = ({ P1: '#ba4552', P2: '#a47525', P3: '#3567ce', P4: '#7f8999' } as Record<string, string>)[priority] || '#7f8999';
+  return <span className="select-tone-label" style={{ color }}><i aria-hidden="true" />{priority} · {priorityNames[priority]}</span>;
+}
+
 export function PriorityTag({ priority }: { priority: Priority }) {
   const tone = priority === 'P1' ? 'red' : priority === 'P2' ? 'amber' : priority === 'P3' ? 'blue' : 'gray';
   return <Tooltip title={priorityNames[priority]}><Tag className={`priority-tag ${tone}`}>{priority}</Tag></Tooltip>;
 }
 
 export function FocusTags({ item }: { item: Requirement | Task }) {
-  return <span className="tag-row">{focusReasons(item).map(reason => <Tag key={reason} className={`focus-tag ${reason === '手动重点' ? 'amber' : 'blue'}`}>{reason === '本周节点' ? '时间节点' : reason}</Tag>)}</span>;
+  return <span className="tag-row">{focusReasons(item).map(reason => <Tag key={reason} className="focus-tag amber">重点关注</Tag>)}</span>;
 }
 
-export function PageHeading({ kicker, title, action }: { kicker?: string; title: string; action?: ReactNode }) {
+export function PageHeading({ kicker, title, action }: { kicker?: string; title: ReactNode; action?: ReactNode }) {
   return <div className="page-heading"><div>{kicker && <div className="eyebrow">{kicker}</div>}<h1>{title}</h1></div><div className="page-action">{action}</div></div>;
 }
 
