@@ -80,9 +80,18 @@ export function dueLabel(item: Requirement | Task) {
 export function dueItems(data: WorkbenchData) {
   const items = [...data.requirements, ...data.tasks].filter(item => !item.archived && !isComplete(item) && (!('milestones' in item) || item.status !== '挂起'));
   return items.filter(item => {
-    const dates = 'milestones' in item ? [item.dueAt, ...item.milestones.filter(m => !m.completedAt).map(m => m.plannedAt)] : [item.targetAt];
-    return dates.some(date => daysUntil(date) !== null && daysUntil(date)! <= 3);
+    const days = daysUntil(dueDate(item));
+    return days !== null && days <= 3;
   }).sort((a, b) => (daysUntil(dueDate(a)) ?? 999) - (daysUntil(dueDate(b)) ?? 999));
+}
+
+export function focusedItemsForScope(data: WorkbenchData, scope: string, userId?: string) {
+  return [...data.requirements, ...data.tasks].filter(item => {
+    if (!focusReasons(item).length) return false;
+    if (scope === '我负责的') return Boolean(userId) && item.ownerId === userId;
+    if (scope === '我参与的') return Boolean(userId) && item.participantIds.includes(userId!);
+    return true;
+  });
 }
 
 export function displayName(data: WorkbenchData, id?: string) { return data.people.find(p => p.id === id)?.name || '未分派'; }

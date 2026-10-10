@@ -13,7 +13,7 @@ function loadModule(path) {
 }
 
 const { migrateWorkCodes, makeWorkCode, reorderItems } = loadModule('../src/data/migrate.ts');
-const { focusReasons, formatDate, workCode, weekBounds, dueListPageSize } = loadModule('../src/utils.ts');
+const { focusReasons, focusedItemsForScope, dueItems, formatDate, workCode, weekBounds, dueListPageSize } = loadModule('../src/utils.ts');
 const { getBreadcrumbItems, primaryNavigation, managementNavigation } = loadModule('../src/navigation.ts');
 const fixture = () => ({
   requirements: [{ id: 'REQ-old-001', title: 'Existing requirement', attachments: [{ id: 'file', dataUrl: 'data:text/plain;base64,dGVzdA==' }] }, { id: 'REQ-old-002' }],
@@ -63,6 +63,42 @@ test('weekly focus includes both manual and automatic inclusion', () => {
   assert.deepEqual(focusReasons({ ...item, manualFocus: true }), ['手动重点', '本周节点']);
   assert.deepEqual(focusReasons({ ...item, status: '已上线' }), []);
   assert.deepEqual(focusReasons({ ...item, archived: true, manualFocus: true }), []);
+});
+
+test('personal dashboard scopes only include focused requirements and tasks', () => {
+  const base = { archived: false, status: '已上线', manualFocus: true, participantIds: [], ownerId: 'me' };
+  const data = {
+    requirements: [
+      { ...base, id: 'owned-focus' },
+      { ...base, id: 'owned-unfocused', manualFocus: false },
+      { ...base, id: 'joined-focus', ownerId: 'other', participantIds: ['me'] },
+      { ...base, id: 'joined-unfocused', ownerId: 'other', participantIds: ['me'], manualFocus: false },
+      { ...base, id: 'archived', archived: true },
+    ],
+    tasks: [{ ...base, id: 'focused-task', status: '已完成', milestones: [] }],
+  };
+  assert.deepEqual(focusedItemsForScope(data, '重点关注', 'me').map(item => item.id), ['owned-focus', 'joined-focus', 'focused-task']);
+  assert.deepEqual(focusedItemsForScope(data, '我负责的', 'me').map(item => item.id), ['owned-focus', 'focused-task']);
+  assert.deepEqual(focusedItemsForScope(data, '我参与的', 'me').map(item => item.id), ['joined-focus']);
+  assert.deepEqual(focusedItemsForScope(data, '我负责的'), []);
+});
+
+test('due panel includes overdue through three calendar days by actual deadline', () => {
+  const today = weekBounds().start.add((new Date().getDay() + 6) % 7, 'day');
+  const when = days => today.add(days, 'day').format('YYYY-MM-DDTHH:mm:ss');
+  const base = { archived: false, status: '设计中', manualFocus: false, participantIds: [] };
+  const data = {
+    requirements: [-2, 0, 1, 3, 4].map(days => ({ ...base, id: `r${days}`, targetAt: when(days) })),
+    tasks: [
+      { ...base, id: 'near-task', status: '进行中', dueAt: when(3), milestones: [] },
+      { ...base, id: 'completed', status: '已完成', dueAt: when(-1), milestones: [] },
+      { ...base, id: 'paused', status: '挂起', dueAt: when(0), milestones: [] },
+      { ...base, id: 'archived', status: '进行中', archived: true, dueAt: when(1), milestones: [] },
+      { ...base, id: 'milestone-only', status: '进行中', dueAt: when(10), milestones: [{ plannedAt: when(0) }] },
+      { ...base, id: 'no-deadline', status: '进行中', milestones: [{ plannedAt: when(-1) }] },
+    ],
+  };
+  assert.deepEqual(dueItems(data).map(item => item.id), ['r-2', 'r0', 'r1', 'r3', 'near-task']);
 });
 
 test('all list dates include the year and display numbers use short codes', () => {

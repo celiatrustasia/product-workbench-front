@@ -14,10 +14,11 @@ interface Props {
   value: Attachment[];
   onChange?: (files: Attachment[]) => unknown | Promise<unknown>;
   imageOnly?: boolean;
+  inlineImages?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }
 
-export default forwardRef<FileAttachmentsRef, Props>(function FileAttachments({ value, onChange, imageOnly = false, onBusyChange }, ref) {
+export default forwardRef<FileAttachmentsRef, Props>(function FileAttachments({ value, onChange, imageOnly = false, inlineImages = false, onBusyChange }, ref) {
   const { message } = App.useApp();
   const input = useRef<HTMLInputElement>(null);
   const latest = useRef({ value, onChange, onBusyChange });
@@ -62,12 +63,15 @@ export default forwardRef<FileAttachmentsRef, Props>(function FileAttachments({ 
     try { await onChange?.(value.filter(file => file.id !== id)); }
     catch (error) { message.error(error instanceof Error ? error.message : '移除失败'); }
   };
-  return <div className={`file-attachments ${imageOnly ? 'description-images' : ''}`}>
-    {onChange && <div className={`file-upload-zone ${dragOver ? 'drag-over' : ''}`} onDragOver={event => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={event => { event.preventDefault(); setDragOver(false); void addFiles(Array.from(event.dataTransfer.files)); }}>
+  return <div className={`file-attachments ${imageOnly ? 'description-images' : ''} ${inlineImages ? 'inline-description-images' : ''}`}>
+    {onChange && <div className={`file-upload-zone ${dragOver ? 'drag-over' : ''}`} onDragOver={event => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={event => { event.preventDefault(); event.stopPropagation(); setDragOver(false); void addFiles(Array.from(event.dataTransfer.files)); }}>
       <input ref={input} type="file" multiple accept={imageOnly ? 'image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp' : undefined} className="visually-hidden" aria-label={imageOnly ? '添加描述图片' : '上传附件'} onChange={event => { void addFiles(Array.from(event.target.files || [])); event.target.value = ''; }} />
-      <Button icon={imageOnly ? <PictureOutlined /> : <UploadOutlined />} onClick={() => input.current?.click()} loading={busy}>{imageOnly ? '添加图片' : '上传附件'}</Button><small>单个文件 ≤ 1 MB · {value.length}/{MAX_FILES}</small>
+      <Button size={inlineImages ? 'small' : 'middle'} icon={imageOnly ? <PictureOutlined /> : <UploadOutlined />} onClick={() => input.current?.click()} loading={busy}>{imageOnly ? '添加图片' : '上传附件'}</Button><small>单个{imageOnly ? '图片' : '文件'} ≤ 1 MB · {value.length}/{MAX_FILES}</small>
     </div>}
-    <Image.PreviewGroup><div className="attachment-files">{value.map(file => <div key={file.id} className={`attachment-file ${isPreviewImage(file) ? 'has-image' : ''}`}>
+    <Image.PreviewGroup><div className={inlineImages ? 'description-inline-gallery' : 'attachment-files'}>{value.map(file => inlineImages && isPreviewImage(file) ? <figure key={file.id} className="description-inline-image">
+      <Image src={file.dataUrl} alt={file.name} width="100%" preview={{ mask: '放大查看' }} />
+      <figcaption><span title={file.name}>{file.name}</span><div><Tooltip title="下载图片"><a href={file.dataUrl} download={file.name} aria-label={`下载 ${file.name}`}><DownloadOutlined /></a></Tooltip>{onChange && <Tooltip title="移除图片"><Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => remove(file.id)} /></Tooltip>}</div></figcaption>
+    </figure> : <div key={file.id} className={`attachment-file ${isPreviewImage(file) ? 'has-image' : ''}`}>
       {isPreviewImage(file) ? <Image src={file.dataUrl} alt={file.name} width={104} height={78} style={{ objectFit: 'contain' }} /> : <span className="attachment-file-icon"><FileOutlined /></span>}
       <div className="attachment-file-copy"><a href={file.dataUrl} download={file.name} title={file.name}>{file.name}</a><small>{fileSize(file.size)}</small></div><div className="attachment-file-actions"><Tooltip title="下载"><a href={file.dataUrl} download={file.name} aria-label={`下载 ${file.name}`}><DownloadOutlined /></a></Tooltip>{onChange && <Tooltip title="移除"><Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={busy} aria-label={`移除 ${file.name}`} onClick={() => remove(file.id)} /></Tooltip>}</div>
     </div>)}</div></Image.PreviewGroup>{!value.length && !onChange && <div className="empty-inline">暂无附件</div>}

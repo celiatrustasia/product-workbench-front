@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { useWorkspace } from '../data/workspace';
 import type { Attachment, Requirement, Task, WorkKind } from '../types';
 import FileAttachments from './FileAttachments';
-import type { FileAttachmentsRef } from './FileAttachments';
+import DescriptionEditor from './DescriptionEditor';
 import { priorityOptions } from './ui';
 import { requirementStatuses, taskStatuses, workCode } from '../utils';
 
@@ -31,7 +31,6 @@ export default function WorkForm({ kind, open, initial, presetRequirementId, onC
   const [attachmentsBusy, setAttachmentsBusy] = useState(false);
   const [imagesBusy, setImagesBusy] = useState(false);
   const [saving, setSaving] = useState(false);
-  const imageUpload = useRef<FileAttachmentsRef>(null);
   const editingSnapshot = useRef(initial);
   const task = kind === 'task';
   const preset = data.requirements.find(r => r.id === presetRequirementId);
@@ -84,12 +83,7 @@ export default function WorkForm({ kind, open, initial, presetRequirementId, onC
 
   return <Drawer title={<strong>{initial ? `编辑${task ? '任务' : '需求'}` : task ? '新建任务' : '新建需求'}</strong>} open={open} onClose={onClose} size={680} className="work-drawer" destroyOnHidden extra={<Button onClick={onClose}>关闭</Button>} footer={<div className="drawer-footer"><Button onClick={onClose}>取消</Button><Button type="primary" loading={saving} disabled={attachmentsBusy || imagesBusy} onClick={() => form.submit()}>保存{task ? '任务' : '需求'}</Button></div>}>
     <Form form={form} layout="vertical" onFinish={submit} requiredMark className="work-form"><div className="form-section-title">基础信息</div><div className="form-grid"><Form.Item label="平台" name="platformId" rules={[{ required: true, message: '请选择平台' }]}><Select showSearch optionFilterProp="label" options={activePlatforms} placeholder="选择平台" /></Form.Item><Form.Item label={task ? '事项名称' : '需求名称'} name="title" rules={[{ required: true, whitespace: true, message: '请输入名称' }]}><Input placeholder={task ? '输入事项名称' : '输入需求名称'} maxLength={100} /></Form.Item></div>
-      <Form.Item label={task ? '事项描述' : '需求描述'} name="description"><Input.TextArea rows={3} placeholder="补充背景、目标和处理范围" maxLength={2000} showCount onPaste={event => {
-        const files = Array.from(event.clipboardData.items).filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter((file): file is File => Boolean(file));
-        if (!files.length) return;
-        if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-        imageUpload.current?.addFiles(files);
-      }} /></Form.Item><div className="description-image-upload"><FileAttachments ref={imageUpload} value={descriptionImages} onChange={setDescriptionImages} imageOnly onBusyChange={setImagesBusy} /></div>
+      <Form.Item label={task ? '事项描述' : '需求描述'} name="description"><DescriptionEditor label={task ? '事项描述' : '需求描述'} images={descriptionImages} onImagesChange={setDescriptionImages} onBusyChange={setImagesBusy} /></Form.Item>
       <div className="form-grid"><Form.Item label="状态" name="status" rules={[{ required: true }]}><Select options={(task ? taskStatuses : requirementStatuses).map(value => ({ value, label: value }))} /></Form.Item><Form.Item label="优先级" name="priority" rules={[{ required: true }]}><Select options={priorityOptions} /></Form.Item></div>
       <div className="form-grid">{task ? <Form.Item label="关联需求" name="requirementId"><Select allowClear showSearch optionFilterProp="label" placeholder="可不关联需求" options={data.requirements.filter(item => !item.archived).map(item => ({ value: item.id, label: `${workCode(item)} · ${item.title}` }))} onChange={id => { const selected = data.requirements.find(item => item.id === id); if (selected) form.setFieldValue('platformId', selected.platformId); }} /></Form.Item> : <Form.Item label="需求类型" name="type"><Select allowClear placeholder="选择类型" options={dict('requirementType')} /></Form.Item>}<Form.Item label="来源" name="source"><Select allowClear placeholder="选择来源" options={dict(task ? 'taskSource' : 'requirementSource')} /></Form.Item></div>
       <div className="form-section-title">分派与时间</div><div className="form-grid"><Form.Item label="负责人" name="ownerId" rules={[{ required: true, message: '请选择负责人' }]}><Select showSearch optionFilterProp="label" placeholder="选择负责人" options={activePeople} /></Form.Item><Form.Item label="参与人" name="participantIds"><Select mode="multiple" showSearch optionFilterProp="label" maxTagCount="responsive" placeholder="选择参与人" options={activePeople} /></Form.Item></div>

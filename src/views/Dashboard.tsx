@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, Pagination, Segmented, Table, Tag } from 'antd';
+import { Button, Pagination, Segmented, Table, Tag, Tooltip } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { ArrowRightOutlined, CheckSquareOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, CheckSquareOutlined, DatabaseOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useWorkspace } from '../data/workspace';
-import { FocusTags, PageHeading, PersonAvatar, PriorityTag, StatusTag } from '../components/ui';
+import { PageHeading, PersonAvatar, PriorityTag, StatusTag } from '../components/ui';
 import type { Requirement, Task } from '../types';
-import { displayName, dueItems, dueLabel, dueListPageSize, focusReasons, formatDate, isoWeekNumber, platformName, requirementStatuses, taskStatuses, weekBounds, workCode } from '../utils';
+import { displayName, dueItems, dueLabel, dueListPageSize, focusedItemsForScope, focusReasons, formatDate, isoWeekNumber, platformName, requirementStatuses, taskStatuses, weekBounds, workCode } from '../utils';
 import { getStatusColor } from '../statusColors';
 
 type Work = Requirement | Task;
@@ -69,10 +69,9 @@ export default function Dashboard() {
   }, []);
   const requirements = data.requirements.filter(item => !item.archived);
   const tasks = data.tasks.filter(item => !item.archived);
-  const all = [...requirements, ...tasks];
   const focusedRequirements = requirements.filter(item => focusReasons(item).length);
   const focusedTasks = tasks.filter(item => focusReasons(item).length);
-  const visible = all.filter(item => scope === '重点关注' ? focusReasons(item).length > 0 : scope === '我负责的' ? item.ownerId === user?.id : item.participantIds.includes(user!.id)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const visible = focusedItemsForScope(data, scope, user?.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const pageSize = 8;
   const safePage = Math.min(page, Math.max(1, Math.ceil(visible.length / pageSize)));
   const due = dueItems(data);
@@ -85,17 +84,16 @@ export default function Dashboard() {
     { title: '类型', width: 66, render: (_, item) => <Tag className={`work-kind-tag ${isTask(item) ? 'task' : ''}`}>{isTask(item) ? '任务' : '需求'}</Tag> },
     { title: '平台', width: 92, render: (_, item) => platformName(data, item.platformId) },
     { title: '状态', width: 88, render: (_, item) => <StatusTag status={item.status} /> },
-    { title: '关注原因', width: 150, render: (_, item) => <FocusTags item={item} /> },
     { title: '负责人', width: 104, render: (_, item) => <span className="owner-cell"><PersonAvatar person={data.people.find(person => person.id === item.ownerId)} size="small" /><span>{displayName(data, item.ownerId)}</span></span> },
-    { title: '上线 / 截止时间', width: 132, render: (_, item) => <span className="date-cell">{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}<small className="cell-sub">{isTask(item) ? '最终截止时间' : '目标上线时间'}</small></span> },
+    { title: '截止时间', width: 120, render: (_, item) => formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt) },
   ];
   const selectScope = (value: string) => { setScope(value); setPage(1); };
   return <div className="page dashboard"><PageHeading kicker={`第 ${String(isoWeekNumber()).padStart(2, '0')} 周 · ${start.add(3, 'day').year()}`} title="产品工作台" />
     <div className="focus-metric-grid"><FocusMetric type="requirement" items={requirementStatuses.map(label => ({ label, status: label, value: focusedRequirements.filter(item => item.status === label).length, color: getStatusColor(label) }))} /><FocusMetric type="task" items={taskStatuses.map(status => ({ label: status === '待处理' ? '待开始' : status, status, value: focusedTasks.filter(item => item.status === status).length, color: getStatusColor(status) }))} /></div>
     <div className="dashboard-grid"><section ref={listRef} className="surface focus-surface"><div className="surface-header focus-header"><Segmented value={scope} onChange={value => selectScope(String(value))} options={['重点关注', '我负责的', '我参与的']} /><span className="muted">共 {visible.length} 项</span></div>
-      <div className="data-scroll"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={visible.slice((safePage - 1) * pageSize, safePage * pageSize)} pagination={false} scroll={{ x: 832 }} rowClassName="clickable-row" onRow={item => ({ onClick: () => navigate(href(item)) })} locale={{ emptyText: '当前没有符合条件的事项' }} /></div>
-      <div className="focus-mobile-list">{visible.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <button className="focus-mobile-row" key={item.id} onClick={() => navigate(href(item))}><div><strong>{item.title}</strong><PriorityTag priority={item.priority} /></div><small>{workCode(item)} · {isTask(item) ? '任务' : '需求'} · {platformName(data, item.platformId)}</small><div className="focus-mobile-foot"><StatusTag status={item.status} /><FocusTags item={item} /></div><div className="focus-mobile-owner"><span>负责人：{displayName(data, item.ownerId)}</span><time>{isTask(item) ? '最终截止时间' : '目标上线时间'}：{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</time></div></button>)}{!visible.length && <div className="empty-block">当前没有符合条件的事项</div>}</div>
+      <div className="data-scroll"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={visible.slice((safePage - 1) * pageSize, safePage * pageSize)} pagination={false} scroll={{ x: 670 }} rowClassName="clickable-row" onRow={item => ({ onClick: () => navigate(href(item)) })} locale={{ emptyText: '当前没有符合条件的重点关注事项' }} /></div>
+      <div className="focus-mobile-list">{visible.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <button className="focus-mobile-row" key={item.id} onClick={() => navigate(href(item))}><div><strong>{item.title}</strong><PriorityTag priority={item.priority} /></div><small>{workCode(item)} · {isTask(item) ? '任务' : '需求'} · {platformName(data, item.platformId)}</small><div className="focus-mobile-foot"><StatusTag status={item.status} /></div><div className="focus-mobile-owner"><span>负责人：{displayName(data, item.ownerId)}</span><time>截止时间：{formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</time></div></button>)}{!visible.length && <div className="empty-block">当前没有符合条件的重点关注事项</div>}</div>
       <Pagination className="focus-pagination" current={safePage} pageSize={pageSize} total={visible.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} />
-    </section><aside className="dashboard-aside"><section className="surface due-surface" aria-label="临期与逾期事项"><div className="surface-header"><h2>临期与逾期 <span className="muted">{due.length} 项</span></h2></div><div className="alert-list">{due.slice((safeDuePage - 1) * duePageSize, safeDuePage * duePageSize).map(item => <Link to={href(item)} className="alert-item" key={item.id}><span className={`alert-dot ${dueLabel(item).includes('逾期') ? 'red' : 'amber'}`} /><span><strong>{item.title}</strong><small>{workCode(item)} · {isTask(item) ? '最终截止时间' : '目标上线时间'}</small></span><em className={dueLabel(item).includes('逾期') ? 'red' : ''}>{dueLabel(item)}</em></Link>)}{!due.length && <div className="empty-block">暂无临期事项</div>}</div>{due.length > duePageSize && <nav className="due-pagination" aria-label="临期与逾期分页"><Pagination size="small" simple={{ readOnly: true }} current={safeDuePage} pageSize={duePageSize} total={due.length} onChange={setDuePage} showSizeChanger={false} /></nav>}</section></aside></div>
+    </section><aside className="dashboard-aside"><section className="surface due-surface" aria-label="临期与逾期事项"><div className="surface-header"><h2>临期与逾期 <span className="muted">{due.length} 项</span></h2><Tooltip title="统计未完成、未归档且未挂起的事项：截止日期已过期，或在今天至未来 3 天内。需求使用目标上线日期，任务使用最终截止日期。"><InfoCircleOutlined className="due-scope-hint" tabIndex={0} aria-label="临期统计口径" /></Tooltip></div><div className="alert-list">{due.slice((safeDuePage - 1) * duePageSize, safeDuePage * duePageSize).map(item => <Link to={href(item)} className="alert-item" key={item.id}><span className={`alert-dot ${dueLabel(item).includes('逾期') ? 'red' : 'amber'}`} /><span><strong>{item.title}</strong><small>{workCode(item)} · 截止 {formatDate(isTask(item) ? (item as Task).dueAt : (item as Requirement).targetAt)}</small></span><em className={dueLabel(item).includes('逾期') ? 'red' : ''}>{dueLabel(item)}</em></Link>)}{!due.length && <div className="empty-block">暂无临期事项</div>}</div>{due.length > duePageSize && <nav className="due-pagination" aria-label="临期与逾期分页"><Pagination size="small" simple={{ readOnly: true }} current={safeDuePage} pageSize={duePageSize} total={due.length} onChange={setDuePage} showSizeChanger={false} /></nav>}</section></aside></div>
   </div>;
 }
