@@ -44,13 +44,28 @@ test('model endpoints reject key forwarding to untrusted hosts and URL credentia
     assert.equal(aiSettingsSchema.safeParse({ ...settings, baseUrl }).success, false);
   }
   assert.equal(aiSettingsSchema.safeParse({ ...settings, provider: 'qwen', baseUrl: 'https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' }).success, true);
-  for (const baseUrl of ['https://api.openai.com/v1', 'https://api.openai.com/v1/']) {
+  for (const baseUrl of ['https://api.openai.com/v1', 'https://api.openai.com/v1/', 'https://sub2api.trustasia.cn/v1', 'https://sub2api.trustasia.cn/v1/']) {
     assert.equal(aiSettingsSchema.safeParse({ ...openaiSettings, baseUrl }).success, true);
   }
-  for (const baseUrl of ['http://api.openai.com/v1', 'https://api.openai.com.evil.example/v1', 'https://user@api.openai.com/v1', 'https://api.openai.com', 'https://api.openai.com/v1/responses', 'https://api.openai.com/v1?redirect=evil', 'https://api.openai.com/v1#fragment', settings.baseUrl]) {
+  for (const baseUrl of ['http://api.openai.com/v1', 'https://api.openai.com.evil.example/v1', 'https://user@api.openai.com/v1', 'https://api.openai.com', 'https://api.openai.com/v1/responses', 'https://api.openai.com/v1?redirect=evil', 'https://api.openai.com/v1#fragment', 'http://sub2api.trustasia.cn/v1', 'https://sub2api.trustasia.cn.evil.example/v1', 'https://sub2api.trustasia.cn:444/v1', 'https://user@sub2api.trustasia.cn/v1', 'https://sub2api.trustasia.cn/v1?key=secret', 'https://sub2api.trustasia.cn/other', settings.baseUrl]) {
     assert.equal(aiSettingsSchema.safeParse({ ...openaiSettings, baseUrl }).success, false);
   }
   assert.equal(aiSettingsSchema.safeParse({ ...settings, baseUrl: openaiSettings.baseUrl }).success, false);
+});
+
+test('authorized Responses gateway retains transport and secret protections', async () => {
+  const gateway = { ...openaiSettings, baseUrl: 'https://sub2api.trustasia.cn/v1', model: 'gpt-5.5' };
+  const result = await completeJson(gateway, [{ role: 'user', content: '仅输出 JSON' }], async (url, options) => {
+    assert.equal(url, 'https://sub2api.trustasia.cn/v1/responses');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers.Authorization, `Bearer ${gateway.apiKey}`);
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, 'gpt-5.5');
+    assert.equal(body.store, false);
+    assert.deepEqual(body.text.format, { type: 'json_object' });
+    return Response.json({ status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '{"ok":true}' }] }] });
+  });
+  assert.deepEqual(result, { ok: true });
 });
 
 test('model transport uses JSON mode and does not expose provider errors or keys', async () => {

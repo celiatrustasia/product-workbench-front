@@ -25,9 +25,13 @@
 3. 输入模型名称、服务商官方接口地址和 API Key，点击“测试连接并保存”。
 4. 连接成功后全体成员可使用。更换服务商需填写新 Key，同一服务商留空可保留已保存 Key。
 
-默认选项为 DeepSeek `deepseek-flash`、通义千问 `qwen-plus` 或 OpenAI `gpt-4.1-mini`。模型名称可修改，所选模型需支持相应接口及 JSON 模式。实际可用模型和余额以自己的服务商账号为准。接口地址限制为对应服务商官方 HTTPS 地址；阿里云支持官方兼容接口及其工作空间域名。
+默认选项为 DeepSeek `deepseek-flash`、通义千问 `qwen-plus` 或 OpenAI `gpt-4.1-mini`。模型名称可修改，所选模型需支持相应接口及 JSON 模式。实际可用模型和余额以自己的服务商账号为准。接口地址限制为对应服务商已支持的 HTTPS 地址；阿里云支持官方兼容接口及其工作空间域名。
 
 OpenAI 接口地址为 `https://api.openai.com/v1`，后端调用 Responses API，设置 `text.format.type=json_object` 和 `store=false`，使用已完成的助手消息解析创建信息；不完整、拒绝或无效 JSON 不会创建事项。默认使用低延迟的 `gpt-4.1-mini`。管理员需在 [OpenAI 平台](https://platform.openai.com/api-keys) 创建 API Key；ChatGPT / Codex 登录凭据和会员额度不能代替此 Key，API 单独计费。连接、权限或余额检查不通过时不保存新配置，原配置继续保留。
+
+经授权的团队 Responses 接口 `https://sub2api.trustasia.cn/v1` 也使用 OpenAI 选项，但需填写团队接口的 Key、模型名称（如 `gpt-5.5`），调用权限及费用以团队服务为准。只支持这个明确指定的 HTTPS 域名及 `/v1` 路径，不允许任意第三方地址。运行后端的机器必须能解析并访问该接口；若服务只在内网可用，公网云服务器需具备相应内网连接，修改 DNS 本身不能建立网络路由。
+
+用户提供的 `wire_api=responses` 对应本项目 Responses 调用，`disable_response_storage=true` 对应 `store=false`。`review_model`、`network_access`、WSL 和 Codex 功能开关不属于工作台助手配置，不写入工作台。模型目录接口用于验证模型是否可用。
 
 服务商官方说明：[DeepSeek API](https://api-docs.deepseek.com/)、[DeepSeek JSON 模式](https://api-docs.deepseek.com/guides/json_mode/)、[通义千问兼容接口](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)。
 

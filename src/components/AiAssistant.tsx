@@ -123,9 +123,9 @@ export default function AiAssistant() {
       {settingsError && <Alert type="error" showIcon title={settingsError} className="ai-settings-notice" />}
       <Form form={form} layout="vertical" requiredMark onFinish={saveSettings} clearOnDestroy disabled={settingsBusy}>
         <Form.Item label="模型服务" name="provider" rules={[{ required: true }]}><Select options={status ? Object.entries(status.providers).map(([value, provider]) => ({ value, label: provider.name })) : []} onChange={(value: Provider) => { if (status) form.setFieldsValue({ ...status.providers[value], apiKey: '' }); }} /></Form.Item>
-        {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="使用 OpenAI 平台 API Key" description={<span>ChatGPT / Codex 会员额度不用于此处，API 调用单独计费。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">创建 API Key</a></span>} />}
+        {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="OpenAI / Responses 兼容接口" description={<span>官方接口使用 OpenAI 平台 API Key；团队接口使用对应服务的 Key。调用权限及费用以所选服务为准。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI 平台</a></span>} />}
         <Form.Item label="模型名称" name="model" rules={[{ required: true, message: '请输入模型名称' }, { max: 100 }]}><Input /></Form.Item>
-        <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商官方接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input /></Form.Item>
+        <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商 HTTPS 接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input /></Form.Item>
         <Form.Item label="API Key" name="apiKey" dependencies={['provider']} extra={status?.configured ? '使用同一服务商时，留空可保留已保存的 Key。' : undefined} rules={[({ getFieldValue }) => ({ validator: (_, value) => value?.trim() || status?.configured && getFieldValue('provider') === status.provider ? Promise.resolve() : Promise.reject(new Error('请输入模型服务的 API Key')) })]}><Input.Password autoComplete="off" placeholder="粘贴服务商生成的 Key" /></Form.Item>
         <div className="ai-settings-actions"><Button onClick={closeSettings}>取消</Button><Button type="primary" htmlType="submit" loading={settingsBusy}>测试连接并保存</Button></div>
       </Form>

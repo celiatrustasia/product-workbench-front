@@ -19,10 +19,10 @@ export const aiSettingsSchema = z.object({
   const qwen = (['dashscope.aliyuncs.com', 'dashscope-intl.aliyuncs.com', 'dashscope-us.aliyuncs.com'].includes(url.hostname)
     || /^[a-zA-Z0-9-]+\.(cn-beijing|ap-southeast-1|us-east-1|eu-central-1)\.maas\.aliyuncs\.com$/.test(url.hostname))
     && ['/compatible-mode/v1', '/compatible-mode/v1/'].includes(url.pathname);
-  const openai = url.hostname === 'api.openai.com' && ['/v1', '/v1/'].includes(url.pathname);
+  const openai = ['api.openai.com', 'sub2api.trustasia.cn'].includes(url.hostname) && ['/v1', '/v1/'].includes(url.pathname);
   const allowedEndpoint = { deepseek, qwen, openai }[value.provider];
   if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || !allowedEndpoint) {
-    ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: '请使用所选服务商的官方 HTTPS 接口地址' });
+    ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: '请使用所选服务商已支持的 HTTPS 接口地址' });
   }
 });
 
