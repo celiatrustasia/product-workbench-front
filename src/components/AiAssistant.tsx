@@ -17,6 +17,26 @@ type CreatedWork = { kind: WorkKind; id: string; code: string; title: string; pr
 type Reply = { reply: string; created: CreatedWork[] };
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; created?: CreatedWork[] };
 type ChatRequest = { requestId: string; message: string; history: { role: 'user' | 'assistant'; content: string }[] };
+type ModelSettings = { provider: Provider; model: string; baseUrl: string; apiKey?: string };
+
+function ModelSettingsForm({ status, busy, onSave, onCancel }: {
+  status: ModelStatus; busy: boolean; onSave: (value: ModelSettings) => Promise<void>; onCancel: () => void;
+}) {
+  const [form] = Form.useForm<ModelSettings>();
+  const selectedProvider = Form.useWatch('provider', form) as Provider | undefined;
+  return <Form name="ai-model-settings" form={form} layout="vertical" requiredMark onFinish={onSave} autoComplete="off" disabled={busy}
+    initialValues={{ provider: status.provider, model: status.model, baseUrl: status.baseUrl, apiKey: '' }}>
+    <Form.Item label="模型服务" name="provider" rules={[{ required: true }]}><Select options={Object.entries(status.providers).map(([value, provider]) => ({ value, label: provider.name }))} onChange={(value: Provider) => {
+      const current = value === status.provider ? status : status.providers[value];
+      form.setFieldsValue({ model: current.model, baseUrl: current.baseUrl, apiKey: '' });
+    }} /></Form.Item>
+    {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="OpenAI / Responses 兼容接口" description={<span>官方接口使用 OpenAI 平台 API Key；团队接口使用对应服务的 Key。调用权限及费用以所选服务为准。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI 平台</a></span>} />}
+    <Form.Item label="模型名称" name="model" rules={[{ required: true, message: '请输入模型名称' }, { max: 100 }]}><Input autoComplete="off" spellCheck={false} /></Form.Item>
+    <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商 HTTPS 接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input type="url" autoComplete="off" spellCheck={false} /></Form.Item>
+    <Form.Item label="API Key" name="apiKey" dependencies={['provider']} extra={status.configured && selectedProvider === status.provider ? 'API Key 已保存；留空可继续使用，不回显密钥。' : undefined} rules={[({ getFieldValue }) => ({ validator: (_, value) => value?.trim() || status.configured && getFieldValue('provider') === status.provider ? Promise.resolve() : Promise.reject(new Error('请输入模型服务的 API Key')) })]}><Input.Password autoComplete="new-password" placeholder={status.configured && selectedProvider === status.provider ? '已保存 Key，无需重复输入' : '粘贴服务商生成的 Key'} /></Form.Item>
+    <div className="ai-settings-actions"><Button onClick={onCancel}>取消</Button><Button type="primary" htmlType="submit" loading={busy}>测试连接并保存</Button></div>
+  </Form>;
+}
 
 export default function AiAssistant() {
   const { user, data, isPreview, refreshWorkspace } = useWorkspace();
@@ -28,8 +48,6 @@ export default function AiAssistant() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
-  const [form] = Form.useForm();
-  const selectedProvider = Form.useWatch('provider', form) as Provider | undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,7 +62,7 @@ export default function AiAssistant() {
   const loadStatus = async () => {
     if (isPreview) return;
     setConfigLoading(true); setConfigError('');
-    try { const value = await request<ModelStatus>('/assistant/config'); if (mounted.current) setStatus(value); }
+    try { const value = await request<ModelStatus>('/assistant/config'); if (mounted.current) { setStatus(value); return value; } }
     catch (error) { if (mounted.current) setConfigError(error instanceof Error ? error.message : '助手配置读取失败'); }
     finally { if (mounted.current) setConfigLoading(false); }
   };
@@ -78,18 +96,18 @@ export default function AiAssistant() {
     if (!value || failed || busy || value.length > 4000) return;
     void send({ requestId: crypto.randomUUID(), message: value, history: messages.slice(-12).map(item => ({ role: item.role, content: item.text })) });
   };
-  const editSettings = () => {
-    if (!status) return;
-    form.setFieldsValue({ provider: status.provider, model: status.model, baseUrl: status.baseUrl, apiKey: '' });
-    setSettingsError(''); setSettingsOpen(true);
+  const editSettings = async () => {
+    if (configLoading) return;
+    const current = await loadStatus();
+    if (current) { setSettingsError(''); setSettingsOpen(true); }
   };
-  const closeSettings = () => { if (!settingsBusy) { setSettingsOpen(false); form.resetFields(); setSettingsError(''); } };
-  const saveSettings = async (value: { provider: Provider; model: string; baseUrl: string; apiKey?: string }) => {
+  const closeSettings = () => { if (!settingsBusy) { setSettingsOpen(false); setSettingsError(''); } };
+  const saveSettings = async (value: ModelSettings) => {
     setSettingsBusy(true); setSettingsError('');
     try {
       const updated = await request<ModelStatus>('/assistant/config', 'PUT', value, 60000);
       if (!mounted.current) return;
-      setStatus(updated); setSettingsOpen(false); form.resetFields(); message.success('模型连接成功，AI 助手已启用');
+      setStatus(updated); setSettingsOpen(false); message.success('模型连接成功，AI 助手已启用');
     } catch (error) { if (mounted.current) setSettingsError(error instanceof Error ? error.message : '模型配置保存失败'); }
     finally { if (mounted.current) setSettingsBusy(false); }
   };
@@ -121,14 +139,7 @@ export default function AiAssistant() {
     <Modal title="AI 模型设置" open={settingsOpen} onCancel={closeSettings} footer={null} destroyOnHidden closable={!settingsBusy} mask={{ closable: !settingsBusy }}>
       <Alert type="info" title="Key 仅保存于服务器，团队成员共用此模型。" description="对话内容会发送给所选模型服务；调用费用由该服务商按用量收取。" className="ai-settings-notice" />
       {settingsError && <Alert type="error" showIcon title={settingsError} className="ai-settings-notice" />}
-      <Form form={form} layout="vertical" requiredMark onFinish={saveSettings} clearOnDestroy disabled={settingsBusy}>
-        <Form.Item label="模型服务" name="provider" rules={[{ required: true }]}><Select options={status ? Object.entries(status.providers).map(([value, provider]) => ({ value, label: provider.name })) : []} onChange={(value: Provider) => { if (status) form.setFieldsValue({ ...status.providers[value], apiKey: '' }); }} /></Form.Item>
-        {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="OpenAI / Responses 兼容接口" description={<span>官方接口使用 OpenAI 平台 API Key；团队接口使用对应服务的 Key。调用权限及费用以所选服务为准。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI 平台</a></span>} />}
-        <Form.Item label="模型名称" name="model" rules={[{ required: true, message: '请输入模型名称' }, { max: 100 }]}><Input /></Form.Item>
-        <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商 HTTPS 接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input /></Form.Item>
-        <Form.Item label="API Key" name="apiKey" dependencies={['provider']} extra={status?.configured ? '使用同一服务商时，留空可保留已保存的 Key。' : undefined} rules={[({ getFieldValue }) => ({ validator: (_, value) => value?.trim() || status?.configured && getFieldValue('provider') === status.provider ? Promise.resolve() : Promise.reject(new Error('请输入模型服务的 API Key')) })]}><Input.Password autoComplete="off" placeholder="粘贴服务商生成的 Key" /></Form.Item>
-        <div className="ai-settings-actions"><Button onClick={closeSettings}>取消</Button><Button type="primary" htmlType="submit" loading={settingsBusy}>测试连接并保存</Button></div>
-      </Form>
+      {settingsOpen && status && <ModelSettingsForm status={status} busy={settingsBusy} onSave={saveSettings} onCancel={closeSettings} />}
     </Modal>
   </>;
 }

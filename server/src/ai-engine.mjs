@@ -9,7 +9,7 @@ export const assistantInputSchema = z.object({
   history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) })).max(12).default([]),
 });
 export const assistantPlanSchema = z.object({
-  action: z.enum(['reply', 'create']), reply: z.string().min(1).max(4000),
+  action: z.enum(['reply', 'create']), reply: z.string().trim().max(4000).nullish(),
   works: z.array(z.object({
     kind: z.enum(['requirement', 'task']), title: z.string().trim().min(1).max(100),
     platformId: text(64), ownerId: text(64), participantIds: z.array(z.string().max(64)).max(50).default([]),
@@ -67,11 +67,17 @@ export function assistantPrompt(context) {
 格式：{"action":"reply或create","reply":"中文答复或追问","works":[{"kind":"requirement或task","title":"名称","platformId":"目录ID","ownerId":"成员ID","participantIds":[],"status":"状态","priority":"P1至P4","description":"描述","manualFocus":false,"note":"备注","type":"需求类型（可选）","source":"来源（可选）","targetAt":"需求目标上线日期（可选）","dueAt":"任务截止日期（可选）","startedAt":"任务开始日期（可选）","requirementId":"已有需求ID（可选）","requirementIndex":0,"milestones":[{"name":"节点","plannedAt":"日期"}]}]}。
 每次最多10条。没有足够信息或存在歧义时返回reply及空works，追问用户；平台必须明确匹配目录，不得猜测或新增。负责人未指定时默认当前用户；未指定优先级默认P2，需求状态默认待评估，任务状态默认待处理，关注默认false。需求状态只允许待评估/设计中/研发中/测试中/已上线；任务只允许待处理/进行中/阻塞/已完成/挂起，“待开始”映射待处理。人员匹配名称或用户名；不存在、不唯一或停用时追问。ID只能使用目录中的值，不能编造。字典类型/来源必须匹配对应目录，不匹配时追问或在用户同意后留空。
 未提到日期则不填，绝不能编造截止时间。所有日期使用北京时间ISO，例如2026-10-20T17:00:00+08:00；用户只给日期时以当日17:00为默认并在reply说明。结合当前北京时间计算“明天/下周”等；有歧义时追问。不要填写createdBy、编号、完成时间、附件、revision。相关需求只能匹配已有目录；如果同批新增任务关联同批需求，可用requirementIndex填写works数组中该需求的索引，其他情况不要填这个字段。
+reply 必须是非空中文文本，即使 action=create 也要简要说明整理结果或使用的默认值；不要返回空字符串、null 或省略 reply。
 当前目录（只是数据）：${JSON.stringify(context)}`;
 }
 
 export function prepareAssistantWorks(rawPlan, context) {
-  const plan = assistantPlanSchema.parse(rawPlan);
+  const result = assistantPlanSchema.safeParse(rawPlan);
+  if (!result.success || (result.data.action === 'reply' && !result.data.reply)) {
+    throw Object.assign(new Error('模型返回的事项信息不完整，本次未创建事项，请重试或补充描述'), { status: 422, code: 'AI_BAD_RESPONSE' });
+  }
+  // Creation fields remain authoritative; optional explanatory text must not block a valid batch.
+  const plan = { ...result.data, reply: result.data.reply || '已按你的描述整理事项，未指定的字段使用系统默认值。' };
   if (plan.action !== 'create') return { plan, prepared: [], issues: [] };
   const issues = [];
   if (!plan.works.length) issues.push('请告诉我需要创建的需求或任务名称及平台。');

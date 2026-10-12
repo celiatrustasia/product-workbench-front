@@ -130,7 +130,7 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       await call(owner,'/assistant/config','PUT',{},403);
       await call({},'/assistant/messages','POST',{requestId:randomUUID(),message:'test'},401);
       await call(owner,'/assistant/messages','POST',{requestId:randomUUID(),message:'test'},403,{'X-CSRF-Token':'wrong'});
-      generate=async()=>({action:'create',reply:'已按默认值整理，优先级 P2。',works:[
+      generate=async()=>({action:'create',reply:'',works:[
         {kind:'task',title:'AI 任务',platformId,requirementIndex:1},
         {kind:'requirement',title:'AI 需求',platformId,ownerId:owner.id},
       ]});
@@ -138,6 +138,7 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       const before=(await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total;
       const first=await call(owner,'/assistant/messages','POST',payload);
       assert.equal(first.created.length,2);
+      assert.match(first.reply,/已创建 2 条事项/);
       assert.equal(first.created[0].kind,'task');
       const createdTask=await call(owner,`/works/task/${first.created[0].id}`);
       assert.equal(createdTask.requirementId,first.created[1].id);
@@ -163,6 +164,21 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       await call(owner,'/assistant/messages','POST',{requestId:randomUUID(),message:'模拟平台在处理过程中停用'},400);
       assert.equal((await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total,before+2);
       assert.deepEqual(await rows("SELECT kind,next_value FROM wb_sequences WHERE kind IN ('requirement','task') ORDER BY kind"),sequences);
+    });
+    await t.test('invalid assistant responses create nothing and the same request can safely retry',async()=>{
+      const before=(await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total;
+      const payload={requestId:randomUUID(),message:'创建电子签 PIN 码隐藏需求'};
+      generate=async()=>({action:'reply',reply:''});
+      const failed=await call(outsider,'/assistant/messages','POST',payload,422);
+      assert.equal(failed.error.code,'AI_BAD_RESPONSE');
+      assert.equal((await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total,before);
+      generate=async()=>({action:'create',reply:null,works:[{kind:'requirement',title:'【电子签】PIN码隐藏',platformId}]});
+      const retried=await call(outsider,'/assistant/messages','POST',payload);
+      assert.equal(retried.created.length,1);
+      assert.match(retried.reply,/已创建 1 条事项/);
+      const repeated=await call(outsider,'/assistant/messages','POST',payload);
+      assert.deepEqual(repeated,retried);
+      assert.equal((await rows('SELECT COUNT(*) AS total FROM wb_works'))[0].total,before+1);
     });
   } finally {
     if(server)await new Promise(resolve=>server.close(resolve));

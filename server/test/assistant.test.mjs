@@ -36,6 +36,14 @@ test('AI settings stay private, redact keys and respect environment management',
     assert.equal((await openaiEnv.load()).baseUrl, aiProviders.openai.baseUrl);
     await assert.rejects(store.save({ ...openaiSettings, baseUrl: 'https://evil.example/v1' }));
     assert.equal((await store.load()).apiKey, openaiSettings.apiKey);
+    const configured = { ...openaiSettings, model: 'gpt-5.5', baseUrl: 'https://sub2api.trustasia.cn/v1' };
+    await store.save(configured);
+    const reopened = await createAiSettings(file).status();
+    assert.equal(reopened.model, configured.model);
+    assert.equal(reopened.baseUrl, configured.baseUrl);
+    assert.equal(reopened.provider, 'openai');
+    assert.equal(reopened.configured, true);
+    assert.equal('apiKey' in reopened, false);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -145,4 +153,26 @@ test('assistant plans validate catalogs, default fields and linked batch creatio
   assert.ok(prepareAssistantWorks(plan([{ kind: 'task', title: 'wrong link', platformId: 'p', requirementIndex: 0 }]), context).issues.length > 0);
   assert.deepEqual(prepareAssistantWorks({ action: 'reply', reply: '请补充平台。' }, context).prepared, []);
   assert.throws(() => prepareAssistantWorks(plan(Array(11).fill({ kind: 'task', title: 'too many' })), context));
+});
+
+test('valid creation data survives empty explanatory replies without relaxing work validation', () => {
+  for (const reply of ['', '  \n ', undefined, null]) {
+    const result = prepareAssistantWorks({ action: 'create', reply, works: [{ kind: 'requirement', title: '【电子签】PIN码隐藏', platformId: 'p', description: '应契约锁需求，PIN码设置隐藏。' }] }, context);
+    assert.deepEqual(result.issues, []);
+    assert.ok(result.plan.reply.trim());
+    assert.equal(result.prepared[0].value.title, '【电子签】PIN码隐藏');
+    assert.equal(result.prepared[0].value.ownerId, 'me');
+  }
+  const incomplete = prepareAssistantWorks({ action: 'create', reply: '', works: [{ kind: 'task', title: '仍需要明确平台' }] }, context);
+  assert.ok(incomplete.issues.some(issue => issue.includes('平台')));
+});
+
+test('invalid model plans produce a readable error before any creation', () => {
+  for (const value of [
+    { action: 'reply', reply: '' }, { action: 'reply', reply: '  ' }, { action: 'reply' },
+    { action: 'create', reply: 123, works: [] }, { action: 'create', reply: '', works: [{ kind: 'task', title: '' }] },
+    { action: 'delete', reply: 'remove', works: [] },
+  ]) {
+    assert.throws(() => prepareAssistantWorks(value, context), error => error.status === 422 && error.code === 'AI_BAD_RESPONSE' && !error.message.includes('Too small'));
+  }
 });
