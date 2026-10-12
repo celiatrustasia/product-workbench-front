@@ -29,7 +29,7 @@
 
 OpenAI 接口地址为 `https://api.openai.com/v1`，后端调用 Responses API，设置 `text.format.type=json_object` 和 `store=false`，使用已完成的助手消息解析创建信息；不完整、拒绝或无效 JSON 不会创建事项。默认使用低延迟的 `gpt-4.1-mini`。管理员需在 [OpenAI 平台](https://platform.openai.com/api-keys) 创建 API Key；ChatGPT / Codex 登录凭据和会员额度不能代替此 Key，API 单独计费。连接、权限或余额检查不通过时不保存新配置，原配置继续保留。
 
-经授权的团队 Responses 接口 `https://sub2api.trustasia.cn/v1` 也使用 OpenAI 选项，但需填写团队接口的 Key、模型名称（如 `gpt-5.5`），调用权限及费用以团队服务为准。只支持这个明确指定的 HTTPS 域名及 `/v1` 路径，不允许任意第三方地址。运行后端的机器必须能解析并访问该接口；若服务只在内网可用，公网云服务器需具备相应内网连接，修改 DNS 本身不能建立网络路由。
+经授权的团队 Responses 接口 `https://sub2api.trustasia.cn/v1` 也使用 OpenAI 选项，但需填写团队接口的 Key、模型名称（如 `gpt-5.5`），调用权限及费用以团队服务为准。`gpt-5.5` 及日期快照在字段整理时使用 `reasoning.effort=low`，避免不必要的长时间推理。只支持这个明确指定的 HTTPS 域名及 `/v1` 路径，不允许任意第三方地址。运行后端的机器必须能解析并访问该接口；若服务只在内网可用，公网云服务器需具备相应内网连接，修改 DNS 本身不能建立网络路由。
 
 用户提供的 `wire_api=responses` 对应本项目 Responses 调用，`disable_response_storage=true` 对应 `store=false`。`review_model`、`network_access`、WSL 和 Codex 功能开关不属于工作台助手配置，不写入工作台。模型目录接口用于验证模型是否可用。
 

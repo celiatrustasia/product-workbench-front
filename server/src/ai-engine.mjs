@@ -26,7 +26,8 @@ export async function completeJson(settings, messages, fetcher = fetch) {
   const validated = aiSettingsSchema.parse(settings);
   const openai = validated.provider === 'openai';
   const body = openai
-    ? { model: validated.model, input: messages, text: { format: { type: 'json_object' } }, store: false, stream: false, max_output_tokens: 4096 }
+    ? { model: validated.model, input: messages, text: { format: { type: 'json_object' } }, store: false, stream: false, max_output_tokens: 4096,
+      ...(/^gpt-5\.5(?:-\d{4}-\d{2}-\d{2})?$/.test(validated.model) ? { reasoning: { effort: 'low' } } : {}) }
     : { model: validated.model, messages, response_format: { type: 'json_object' }, stream: false, max_tokens: 4096,
       ...(validated.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : { enable_thinking: false }) };
   let response;

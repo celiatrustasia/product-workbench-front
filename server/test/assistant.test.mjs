@@ -61,6 +61,7 @@ test('authorized Responses gateway retains transport and secret protections', as
     assert.equal(options.headers.Authorization, `Bearer ${gateway.apiKey}`);
     const body = JSON.parse(options.body);
     assert.equal(body.model, 'gpt-5.5');
+    assert.deepEqual(body.reasoning, { effort: 'low' });
     assert.equal(body.store, false);
     assert.deepEqual(body.text.format, { type: 'json_object' });
     return Response.json({ status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '{"ok":true}' }] }] });
