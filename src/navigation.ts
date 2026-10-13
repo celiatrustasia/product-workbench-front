@@ -2,6 +2,7 @@ export const primaryNavigation = [
   { key: '/', label: '工作台' },
   { key: '/requirements', label: '需求池' },
   { key: '/tasks', label: '任务管理' },
+  { key: '/iterations', label: '迭代管理' },
   { key: '/notifications', label: '通知中心' },
 ] as const;
 
@@ -25,10 +26,10 @@ export function getBreadcrumbItems(pathname: string, detailTitle?: string): Brea
 
   const primary = primaryNavigation.find(item => item.key === selected);
   if (!primary) return [{ title: '页面未找到' }];
-  if (segments.length > 1 && (selected === '/requirements' || selected === '/tasks')) {
+  if (segments.length > 1 && (selected === '/requirements' || selected === '/tasks' || selected === '/iterations')) {
     return [
       { title: primary.label, path: primary.key },
-      { title: detailTitle || (selected === '/requirements' ? '需求详情' : '任务详情') },
+      { title: detailTitle || (selected === '/requirements' ? '需求详情' : selected === '/iterations' ? '迭代详情' : '任务详情') },
     ];
   }
   return [{ title: primary.label }];

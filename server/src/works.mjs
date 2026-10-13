@@ -12,7 +12,8 @@ export async function hydrateWorks(records, connection) {
   const ids = records.map(item => item.id);
   const participants = await rows(`SELECT work_id,user_id FROM wb_participants WHERE work_id IN (${placeholders(ids)}) ORDER BY user_id`, ids, connection);
   const files = await rows(`SELECT id,work_id,zone,name,mime,size FROM wb_files WHERE work_id IN (${placeholders(ids)}) ORDER BY created_at,id`, ids, connection);
-  return records.map(row => ({ ...json(row.document), id: row.id, code: row.code, title: row.title, status: row.status, priority: row.priority, platformId: row.platform_id, ownerId: row.owner_id, createdBy: row.created_by, requirementId: row.kind === 'task' ? row.requirement_id || undefined : undefined, participantIds: participants.filter(item => item.work_id === row.id).map(item => item.user_id), manualFocus: Boolean(row.manual_focus), archived: Boolean(row.archived), revision: row.revision, createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), attachments: files.filter(file => file.work_id === row.id && file.zone === 'attachment').map(fileView), descriptionImages: files.filter(file => file.work_id === row.id && file.zone === 'description').map(fileView) }));
+  const iterationItems = await rows(`SELECT work_id,iteration_id FROM wb_iteration_items WHERE work_id IN (${placeholders(ids)})`, ids, connection);
+  return records.map(row => ({ ...json(row.document), id: row.id, code: row.code, title: row.title, status: row.status, priority: row.priority, platformId: row.platform_id, ownerId: row.owner_id, iterationId: iterationItems.find(item => item.work_id === row.id)?.iteration_id, createdBy: row.created_by, requirementId: row.kind === 'task' ? row.requirement_id || undefined : undefined, participantIds: participants.filter(item => item.work_id === row.id).map(item => item.user_id), manualFocus: Boolean(row.manual_focus), archived: Boolean(row.archived), revision: row.revision, createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), attachments: files.filter(file => file.work_id === row.id && file.zone === 'attachment').map(fileView), descriptionImages: files.filter(file => file.work_id === row.id && file.zone === 'description').map(fileView) }));
 }
 export async function findWork(kind, id, connection, lock = false) {
   const [record] = await rows(`SELECT * FROM wb_works WHERE id=? AND kind=? AND deleted_at IS NULL${lock ? ' FOR UPDATE' : ''}`, [id, kind], connection);
@@ -27,8 +28,15 @@ export async function notify(connection, kind, work, recipients, title, text, le
     await rows('INSERT IGNORE INTO wb_notices (id,kind,work_id,recipient_id,title,text,level,dedupe_key,created_at) SELECT ?,?,?,?,?,?,?,?,? FROM wb_users WHERE id=? AND active=1 AND deleted_at IS NULL', [randomUUID(), kind, work.id, recipient, title, text, level, dedupe ? `${dedupe}:${recipient}` : null, stamp(), recipient], connection);
   }
 }
-async function validateReferences(connection, kind, value, existing) {
+async function validateReferences(connection, kind, value, existing, user) {
   await rows("SELECT next_value FROM wb_sequences WHERE kind='settings-lock' FOR UPDATE", [], connection);
+  if (value.iterationId !== existing?.iterationId) {
+    for (const iterationId of [existing?.iterationId, value.iterationId].filter(Boolean)) {
+      const [iteration] = await rows('SELECT * FROM wb_iterations WHERE id=? FOR UPDATE', [iterationId], connection);
+      assert(iteration && iteration.status !== '已完成', 409, '迭代不存在或已完成，请先重新打开迭代');
+      assert(isAdmin(user) || iteration.owner_id === user.id || iteration.created_by === user.id, 403, '你无权管理所选迭代');
+    }
+  }
   const [platform] = await rows('SELECT active FROM wb_platforms WHERE id=?', [value.platformId], connection);
   assert(platform && (platform.active || existing?.platformId === value.platformId), 400, '请选择启用的平台');
   for (const personId of [value.ownerId, ...value.participantIds]) {
@@ -68,7 +76,7 @@ export async function saveWork(user, kind, raw, id, sharedConnection) {
       assert(canContribute(user, existing), 403, '你无权编辑该事项', 'FORBIDDEN');
       assert(parsed.revision === existing.revision, 409, '事项已被其他人更新，请刷新后重新编辑', 'VERSION_CONFLICT');
     }
-    const value = { ...parsed };
+    const value = { ...parsed, iterationId: Object.hasOwn(raw, 'iterationId') ? parsed.iterationId : existing?.iterationId };
     delete value.revision;
     if (kind === 'task') value.completedAt = value.status === '已完成' ? existing?.completedAt || iso(stamp()) : undefined;
     else value.launchedAt = value.status === '已上线' ? existing?.launchedAt || iso(stamp()) : undefined;
@@ -76,7 +84,7 @@ export async function saveWork(user, kind, raw, id, sharedConnection) {
     const comparable = existing ? (kind === 'task' ? taskSchema : requirementSchema).parse(existing) : {};
     const changes = changesBetween(normalizeDocument({ ...comparable, participantIds: comparable.participantIds || [], ownerId: comparable.ownerId }), value);
     if (existing && !canEdit(user, existing)) assert(Object.keys(changes).every(key => ['status','note','attachments','descriptionImages','completedAt','launchedAt'].includes(key)), 403, '参与人只能更新状态、备注和附件', 'FORBIDDEN');
-    await validateReferences(connection, kind, value, existing);
+    await validateReferences(connection, kind, value, existing, user);
     const workId = id || randomUUID();
     let code = existing?.code;
     if (!existing) {
@@ -85,11 +93,15 @@ export async function saveWork(user, kind, raw, id, sharedConnection) {
       await rows('UPDATE wb_sequences SET next_value=next_value+1 WHERE kind=?', [kind], connection);
     }
     const document = { ...value };
-    for (const field of ['platformId','ownerId','participantIds','title','status','priority','manualFocus','requirementId','attachments','descriptionImages']) delete document[field];
+    for (const field of ['platformId','ownerId','participantIds','title','status','priority','manualFocus','requirementId','attachments','descriptionImages','iterationId']) delete document[field];
     const dueAt = kind === 'task' ? value.dueAt : value.targetAt;
     const time = stamp();
     if (existing) await rows('UPDATE wb_works SET title=?,status=?,priority=?,platform_id=?,owner_id=?,requirement_id=?,manual_focus=?,due_at=?,started_at=?,document=?,revision=revision+1,updated_at=? WHERE id=?', [value.title, value.status, value.priority, value.platformId, value.ownerId, value.requirementId || null, value.manualFocus, dueAt?.replace('T',' ') || null, value.startedAt?.replace('T',' ') || null, JSON.stringify(document), time, workId], connection);
     else await rows('INSERT INTO wb_works (id,kind,code,title,status,priority,platform_id,owner_id,created_by,requirement_id,manual_focus,due_at,started_at,document,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [workId, kind, code, value.title, value.status, value.priority, value.platformId, value.ownerId, user.id, value.requirementId || null, value.manualFocus, dueAt?.replace('T',' ') || null, value.startedAt?.replace('T',' ') || null, JSON.stringify(document), time, time], connection);
+    if (value.iterationId !== existing?.iterationId) {
+      await rows('DELETE FROM wb_iteration_items WHERE work_id=?', [workId], connection);
+      if (value.iterationId) await rows('INSERT INTO wb_iteration_items (work_id,iteration_id) VALUES (?,?)', [workId,value.iterationId], connection);
+    }
     await rows('DELETE FROM wb_participants WHERE work_id=?', [workId], connection);
     for (const participant of value.participantIds) await rows('INSERT INTO wb_participants VALUES (?,?)', [workId, participant], connection);
     await bindFiles(connection, user, workId, value);

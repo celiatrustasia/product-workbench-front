@@ -10,7 +10,7 @@
 
 ## 事项
 
-`GET /workspace`：人员、平台、字典、需求、任务、操作记录及仅属于当前成员的提醒。不包含密码、会话 Token 或附件二进制。
+`GET /workspace`：人员、平台、字典、需求、任务、迭代、操作记录及仅属于当前成员的提醒。不包含密码、会话 Token 或附件二进制。
 
 `GET /works/:kind`：返回 `{ items, total, page, pageSize }`，kind 为 `requirement` 或 `task`。支持 `page`、`pageSize`（最多 100）、`search`、`statuses`（逗号分隔）、`platformId`、`priority`、`ownerId`、`archived=true|false|all`、`focus=yes|no`。
 
@@ -25,6 +25,16 @@
 `PATCH /works/:kind/:id/archive`：`{ archived: boolean }`，仅管理员。`DELETE /works/:kind/:id` 仅管理员，逻辑删除需求时保留关联任务并解除关联。
 
 `PATCH /tasks/:id/milestones/:milestoneId`：`{ completed: boolean, revision: number }`。创建人、负责人、管理员和参与人可更新；参与人不可更改分派和基础信息，仅可改状态、备注、附件和里程碑完成状态。
+
+## 迭代
+
+以下接口均需登录，并遵守现有 CSRF 和 Origin 校验。`GET /iterations` 返回迭代数组；`POST /iterations` 创建，`PUT /iterations/:id` 更新，`DELETE /iterations/:id` 删除。字段：`name`（1–100 字）、`goal`（最多 2000 字）、`startDate/endDate`（有效的 YYYY-MM-DD，结束不早于开始）、`ownerId`、`status`（待开始/进行中/已完成）；更新需携带 `revision`。新迭代从待开始创建，需开始后才能完成。
+
+`POST /iterations/:id/items`：`{items:[{kind:"requirement"|"task",id,revision}],remove?:boolean}`，最多 100 项。默认移入目标迭代并解除旧归属，`remove:true` 从当前迭代移出；整个批次通过权限和版本检查后原子提交，每项的 `revision` 递增。
+
+管理员、迭代创建人或负责人可管理该迭代；移动还需要每个事项的基础编辑权限，跨迭代移动需同时拥有源迭代权限。已完成迭代须重新打开才能调整范围。删除迭代仅解除归属，保留需求、任务和操作记录。
+
+事项返回字段 `iterationId` 为可选；保存时传 ID 可设置归属，传 `null` 可清除，不传则保留已有归属。同样执行迭代权限与完成状态校验。公开 `/youke` 只提供虚构的前端演示，所有 `/api` 业务接口仍需真实登录。
 
 ## 基础管理
 

@@ -70,6 +70,8 @@ export async function deleteSetting(user, kind, id) {
       await keepAdmin(connection,item,{active:false},user);
       const [related] = await rows('SELECT COUNT(*) AS total FROM wb_works WHERE owner_id=? OR created_by=? OR id IN (SELECT work_id FROM wb_participants WHERE user_id=?)', [id,id,id], connection);
       assert(!related.total, 409, '成员仍关联事项，请使用停用功能');
+      const [iterations] = await rows('SELECT COUNT(*) AS total FROM wb_iterations WHERE owner_id=? OR created_by=?', [id,id], connection);
+      assert(!iterations.total, 409, '成员仍关联迭代，请使用停用功能');
       await rows('UPDATE wb_users SET active=0,deleted_at=? WHERE id=?',[stamp(),id],connection);
       await rows('DELETE FROM wb_sessions WHERE user_id=?',[id],connection);
     } else if (kind === 'platforms') {

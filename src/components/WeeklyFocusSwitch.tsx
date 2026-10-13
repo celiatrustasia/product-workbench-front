@@ -5,13 +5,13 @@ import type { Requirement, Task, WorkKind } from '../types';
 import { canEditAll } from '../utils';
 
 export default function WeeklyFocusSwitch({ kind, item }: { kind: WorkKind; item: Requirement | Task }) {
-  const { user, saveWork } = useWorkspace();
+  const { user, saveWork, isVisitor } = useWorkspace();
   const { message } = App.useApp();
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   const canEdit = canEditAll(item, user?.id, user?.access === '管理员');
-  const disabled = item.archived || !canEdit;
-  const hint = item.archived ? '归档事项不能调整关注' : !canEdit ? '仅管理员、创建人或负责人可调整关注' : '直接设置或取消重点关注';
+  const disabled = isVisitor || item.archived || !canEdit;
+  const hint = isVisitor ? '访客模式仅供查看' : item.archived ? '归档事项不能调整关注' : !canEdit ? '仅管理员、创建人或负责人可调整关注' : '直接设置或取消重点关注';
 
   const change = async (manualFocus: boolean) => {
     if (disabled || pending.current || manualFocus === item.manualFocus) return;

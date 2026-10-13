@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 import dayjs from 'dayjs';
 import { makeSeed } from './seed';
 import { makeWorkCode, migrateWorkCodes, reorderItems } from './migrate';
-import type { Activity, DictionaryItem, Notice, Person, Platform, Requirement, Task, WorkKind, WorkbenchData } from '../types';
+import type { Activity, DictionaryItem, Notice, Person, Platform, Requirement, Task, WorkKind, WorkbenchData, Iteration, IterationMember } from '../types';
 import { isApiMode, request, RequestError, setCsrf } from './api';
+import { isVisitorPath, makeVisitorSeed } from './visitor';
 
 const DATA_KEY = 'product-workbench-preview-v1';
 const SESSION_KEY = 'product-workbench-preview-user';
@@ -24,6 +25,10 @@ interface WorkspaceContextValue {
   data: WorkbenchData;
   user?: Person;
   isPreview: boolean;
+  isVisitor: boolean;
+  saveIteration: (value: Iteration) => Promise<string>;
+  deleteIteration: (id: string) => Promise<void>;
+  changeIterationMembers: (id: string, items: IterationMember[], remove?: boolean) => Promise<void>;
   loading?: boolean;
   error?: string;
   retry?: () => void;
@@ -52,13 +57,15 @@ interface WorkspaceContextValue {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  if (isVisitorPath(window.location.pathname)) return <PreviewWorkspaceProvider visitor>{children}</PreviewWorkspaceProvider>;
   return isApiMode() ? <ApiWorkspaceProvider>{children}</ApiWorkspaceProvider> : <PreviewWorkspaceProvider>{children}</PreviewWorkspaceProvider>;
 }
 
-function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [data, updateData] = useState<WorkbenchData>(load);
+function PreviewWorkspaceProvider({ children, visitor = false }: { children: ReactNode; visitor?: boolean }) {
+  const [data, updateData] = useState<WorkbenchData>(() => visitor ? makeVisitorSeed() : load());
   const dataRef = useRef(data);
   const setData = useCallback((value: WorkbenchData | ((current: WorkbenchData) => WorkbenchData)) => {
+    if (visitor) throw new Error('访客模式仅供查看');
     const next = typeof value === 'function' ? value(dataRef.current) : value;
     try {
       localStorage.setItem(DATA_KEY, JSON.stringify(next));
@@ -67,11 +74,12 @@ function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
     }
     dataRef.current = next;
     updateData(next);
-  }, []);
-  const [userId, setUserId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
+  }, [visitor]);
+  const [userId, setUserId] = useState<string | null>(() => visitor ? 'celia' : localStorage.getItem(SESSION_KEY));
   const user = data.people.find(person => person.id === userId && person.active);
 
   useEffect(() => {
+    if (visitor) return;
     try { localStorage.setItem(DATA_KEY, JSON.stringify(dataRef.current)); }
     catch { /* Existing data stays intact if migration cannot be persisted yet. */ }
   }, []);
@@ -83,6 +91,7 @@ function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
   }, [userId, user]);
 
   const signIn = useCallback((username: string, password: string) => {
+    if (visitor) return false;
     const person = data.people.find(item => item.username === username.trim() && item.active);
     if (!person || password !== 'demo1234') return false;
     localStorage.setItem(SESSION_KEY, person.id);
@@ -91,6 +100,7 @@ function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
   }, [data.people]);
 
   const signOut = useCallback(() => {
+    if (visitor) return;
     localStorage.removeItem(SESSION_KEY);
     setUserId(null);
   }, []);
@@ -172,7 +182,16 @@ function PreviewWorkspaceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(DATA_KEY, JSON.stringify(seed));
   }, []);
 
-  return <WorkspaceContext.Provider value={{ data, user, isPreview: true, refreshWorkspace: async () => {}, changePassword: async () => { throw new Error('预览模式不支持修改密码'); }, resetPersonPassword: async () => ({ temporaryPassword: 'demo1234' }), signIn, signOut, saveWork, archiveWork, updateMilestone, savePlatform, reorderPlatforms, deletePlatform, savePerson, deletePerson, saveDictionary, reorderDictionary, deleteDictionary, deleteWork, markNotice, addNotice, resetPreview }}>{children}</WorkspaceContext.Provider>;
+  const saveIteration = async (value: Iteration) => {
+    const id = value.id || crypto.randomUUID();
+    setData(current => ({ ...current, iterations: [...(current.iterations || []).filter(item => item.id !== id), { ...value, id, createdBy: value.createdBy || userId!, createdAt: value.createdAt || stamp() }] }));
+    return id;
+  };
+  const deleteIteration = async (id: string) => setData(current => ({ ...current, iterations: (current.iterations || []).filter(item => item.id !== id), requirements: current.requirements.map(item => item.iterationId === id ? { ...item, iterationId: undefined } : item), tasks: current.tasks.map(item => item.iterationId === id ? { ...item, iterationId: undefined } : item) }));
+  const changeIterationMembers = async (id: string, items: IterationMember[], remove = false) => {
+    setData(current => ({ ...current, requirements: current.requirements.map(item => items.some(selected => selected.kind === 'requirement' && selected.id === item.id) ? { ...item, iterationId: remove ? undefined : id } : item), tasks: current.tasks.map(item => items.some(selected => selected.kind === 'task' && selected.id === item.id) ? { ...item, iterationId: remove ? undefined : id } : item) }));
+  };
+  return <WorkspaceContext.Provider value={{ data, user, isVisitor: visitor, saveIteration, deleteIteration, changeIterationMembers, isPreview: true, refreshWorkspace: async () => {}, changePassword: async () => { throw new Error('预览模式不支持修改密码'); }, resetPersonPassword: async () => ({ temporaryPassword: 'demo1234' }), signIn, signOut, saveWork, archiveWork, updateMilestone, savePlatform, reorderPlatforms, deletePlatform, savePerson, deletePerson, saveDictionary, reorderDictionary, deleteDictionary, deleteWork, markNotice, addNotice, resetPreview }}>{children}</WorkspaceContext.Provider>;
 }
 
 const emptyData = (): WorkbenchData => ({ people: [], platforms: [], dictionary: [], requirements: [], tasks: [], notices: [], activities: [] });
@@ -224,12 +243,16 @@ function ApiWorkspaceProvider({ children }: { children: ReactNode }) {
     const existing = dataRef.current[kind === 'dictionaries' ? 'dictionary' : kind].some(item => item.id === value.id);
     return mutate<{ temporaryPassword?: string }>(`/${kind}${existing ? `/${value.id}` : ''}`, existing ? 'PUT' : 'POST', value);
   };
-  return <WorkspaceContext.Provider value={{ data, user, isPreview: false, loading, error, refreshWorkspace: refresh, retry: () => { void boot(); },
+  return <WorkspaceContext.Provider value={{ data, user, isVisitor: false,
+    saveIteration: async value => (await mutate<Iteration>(`/iterations${value.id ? `/${value.id}` : ''}`, value.id ? 'PUT' : 'POST', value)).id,
+    deleteIteration: async id => { await mutate(`/iterations/${id}`, 'DELETE'); },
+    changeIterationMembers: async (id, items, remove = false) => { await mutate(`/iterations/${id}/items`, 'POST', { items, remove }); },
+    isPreview: false, loading, error, refreshWorkspace: refresh, retry: () => { void boot(); },
     signIn: async (username, password) => { const session = await request<{ user: Person; csrf: string }>('/auth/login', 'POST', { username, password }); sessionVersion.current++; setCsrf(session.csrf); setUser(session.user); if (!session.user.mustChangePassword) await refresh(); return true; },
     signOut: async () => { await request('/auth/logout', 'POST'); sessionVersion.current++; setCsrf(''); setUser(undefined); dataRef.current = emptyData(); setData(emptyData()); },
     changePassword: async (oldPassword, newPassword) => { await request('/auth/password', 'POST', { oldPassword, newPassword }); setUser(current => current ? { ...current, mustChangePassword: false } : current); await refresh(); },
     resetPersonPassword: id => mutate<{ temporaryPassword: string }>(`/people/${id}/reset-password`, 'POST'),
-    saveWork: async (kind, value) => (await mutate<Requirement | Task>(`/works/${kind}${value.id ? `/${value.id}` : ''}`, value.id ? 'PUT' : 'POST', value)).id,
+    saveWork: async (kind, value) => (await mutate<Requirement | Task>(`/works/${kind}${value.id ? `/${value.id}` : ''}`, value.id ? 'PUT' : 'POST', { ...value, iterationId: value.iterationId || null })).id,
     archiveWork: async (kind, id, archived) => { await mutate(`/works/${kind}/${id}/archive`, 'PATCH', { archived }); },
     deleteWork: async (kind, id) => { await mutate(`/works/${kind}/${id}`, 'DELETE'); },
     updateMilestone: async (taskId, milestoneId) => { const task = dataRef.current.tasks.find(item => item.id === taskId); if (!task) throw new Error('任务不存在'); await mutate(`/tasks/${taskId}/milestones/${milestoneId}`, 'PATCH', { revision: task.revision, completed: !task.milestones.find(item => item.id === milestoneId)?.completedAt }); },

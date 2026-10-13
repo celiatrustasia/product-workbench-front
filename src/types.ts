@@ -2,6 +2,20 @@ export type Priority = 'P1' | 'P2' | 'P3' | 'P4';
 export type RequirementStatus = '待评估' | '设计中' | '研发中' | '测试中' | '已上线';
 export type TaskStatus = '待处理' | '进行中' | '阻塞' | '已完成' | '挂起';
 export type WorkKind = 'requirement' | 'task';
+export type IterationStatus = '待开始' | '进行中' | '已完成';
+export interface Iteration {
+  id: string;
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+  ownerId: string;
+  status: IterationStatus;
+  createdBy: string;
+  createdAt: string;
+  revision?: number;
+}
+export interface IterationMember { kind: WorkKind; id: string; revision?: number }
 
 export interface Person {
   id: string;
@@ -63,6 +77,7 @@ export interface WorkBase {
   updatedAt: string;
   archived: boolean;
   revision?: number;
+  iterationId?: string;
 }
 
 export interface Requirement extends WorkBase {
@@ -108,6 +123,7 @@ export interface Activity {
 }
 
 export interface WorkbenchData {
+  iterations?: Iteration[];
   nextNumbers?: Record<WorkKind, number>;
   people: Person[];
   platforms: Platform[];

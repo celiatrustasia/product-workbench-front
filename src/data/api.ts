@@ -1,12 +1,14 @@
+import { isVisitorPath } from './visitor';
 import type { Attachment } from '../types';
 
-export const isApiMode = () => location.protocol !== 'file:' && import.meta.env.VITE_DATA_MODE !== 'preview';
+export const isApiMode = () => !isVisitorPath(location.pathname) && location.protocol !== 'file:' && import.meta.env.VITE_DATA_MODE !== 'preview';
 let csrf = '';
 export const setCsrf = (value: string) => { csrf = value; };
 export class RequestError extends Error {
   constructor(message: string, public status: number, public code: string) { super(message); }
 }
 export async function request<T>(path: string, method = 'GET', body?: unknown, timeoutMs = 20000): Promise<T> {
+  if (isVisitorPath(location.pathname)) throw new RequestError('访客模式仅供查看', 403, 'VISITOR_READ_ONLY');
   const form = body instanceof FormData;
   let response: Response;
   try {

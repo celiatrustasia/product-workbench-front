@@ -42,6 +42,11 @@ test('built HTML has valid JavaScript and a fresh CSP nonce, including direct in
   try{
     const response=await fetch(`http://127.0.0.1:${server.address().port}/index.html`);
     assert.equal(response.status,200);
+    const visitor=await fetch(`http://127.0.0.1:${server.address().port}/youke`);
+    assert.equal(visitor.status,200);
+    assert.ok((await visitor.text()).includes('type="module"'));
+    const privateWorkspace=await fetch(`http://127.0.0.1:${server.address().port}/api/workspace`);
+    assert.equal(privateWorkspace.status,401);
     const html=await response.text();const script=html.match(/<script nonce="([^"]+)" type="module">([\s\S]*?)<\/script>/);
     assert.ok(script);assert.ok(response.headers.get('content-security-policy').includes(`nonce-${script[1]}`));
     const ts=createRequire(import.meta.url)('../../node_modules/typescript');

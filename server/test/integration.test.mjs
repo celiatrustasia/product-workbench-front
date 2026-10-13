@@ -64,6 +64,45 @@ test('cloud MySQL end-to-end permissions, works, uploads and reminders',{skip:pr
       await call(admin,`/platforms/${platformId}`,'DELETE',undefined,409);
       await call(admin,`/people/${admin.id}`,'PUT',{...workspace.people[0],active:false},400);
     });
+    await t.test('iteration lifecycle, atomic moves, permissions and retained works',async()=>{
+      await call({},'/iterations','GET',undefined,401);
+      const body={name:'集成验证迭代',goal:'交付验证',startDate:'2026-10-01',endDate:'2026-10-14',ownerId:owner.id};
+      await call(owner,'/iterations','POST',{...body,startDate:'2026-02-30'},400);
+      await call(owner,'/iterations','POST',{...body,endDate:'2026-09-01'},400);
+      let first=await call(owner,'/iterations','POST',body,201);
+      let second=await call(admin,'/iterations','POST',{...body,name:'下个迭代'},201);
+      await call(outsider,`/iterations/${first.id}`,'PUT',{...first,goal:'越权'},403);
+      await call(participant,`/iterations/${first.id}/items`,'POST',{items:[{kind:'task',id:task.id,revision:task.revision}]},403);
+      await call(owner,`/iterations/${first.id}/items`,'POST',{items:[{kind:'task',id:task.id,revision:task.revision},{kind:'requirement',id:'missing',revision:1}]},404);
+      assert.equal((await call(owner,`/works/task/${task.id}`)).iterationId,undefined);
+      await call(owner,`/iterations/${first.id}/items`,'POST',{items:[{kind:'task',id:task.id,revision:task.revision},{kind:'requirement',id:requirement.id,revision:requirement.revision}]});
+      task=await call(owner,`/works/task/${task.id}`);requirement=await call(owner,`/works/requirement/${requirement.id}`);
+      assert.equal(task.iterationId,first.id);assert.equal(requirement.iterationId,first.id);
+      await call(owner,`/works/task/${task.id}`,'PUT',{...task,revision:1},409);
+      await call(admin,`/people/${owner.id}`,'DELETE',undefined,409);
+      first=await call(owner,`/iterations/${first.id}`,'PUT',{...first,status:'进行中'});
+      await call(owner,`/iterations/${first.id}`,'PUT',{...first,revision:1},409);
+      first=await call(owner,`/iterations/${first.id}`,'PUT',{...first,status:'已完成'});
+      await call(owner,`/iterations/${second.id}/items`,'POST',{items:[{kind:'task',id:task.id,revision:task.revision}]},409);
+      await call(owner,`/works/task/${task.id}`,'PUT',{...task,iterationId:null},409);
+      first=await call(owner,`/iterations/${first.id}`,'PUT',{...first,status:'进行中'});
+      await call(owner,`/iterations/${second.id}/items`,'POST',{items:[{kind:'task',id:task.id,revision:task.revision}]});
+      task=await call(owner,`/works/task/${task.id}`);assert.equal(task.iterationId,second.id);
+      await call(owner,`/iterations/${first.id}/items`,'POST',{items:[{kind:'requirement',id:requirement.id,revision:requirement.revision}],remove:true});
+      requirement=await call(owner,`/works/requirement/${requirement.id}`);assert.equal(requirement.iterationId,undefined);
+      // The normal work editor applies the same iteration permissions as bulk moves.
+      const privateIteration=await call(outsider,'/iterations','POST',{...body,name:'其他成员的迭代',ownerId:outsider.id},201);
+      await call(owner,`/works/requirement/${requirement.id}`,'PUT',{...requirement,iterationId:privateIteration.id},403);
+      requirement=await call(owner,`/works/requirement/${requirement.id}`,'PUT',{...requirement,iterationId:first.id});
+      assert.equal(requirement.iterationId,first.id);
+      requirement=await call(owner,`/works/requirement/${requirement.id}`,'PUT',{...requirement,iterationId:null});
+      assert.equal(requirement.iterationId,undefined);
+      await call(outsider,`/iterations/${privateIteration.id}`,'DELETE');
+      await call(owner,`/iterations/${second.id}`,'DELETE');
+      task=await call(owner,`/works/task/${task.id}`);assert.equal(task.iterationId,undefined);
+      assert.ok((await call(owner,'/workspace')).iterations.some(item=>item.id===first.id));
+      await call(owner,`/iterations/${first.id}`,'DELETE');
+    });
     await t.test('uploads are private before binding, survive saves and cannot be stolen',async()=>{
       const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=','base64');
       const form=new FormData();form.append('file',new Blob([png],{type:'image/png'}),'测试.png');

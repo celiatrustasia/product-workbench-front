@@ -15,6 +15,7 @@ import { saveWork, findWork, hydrateWorks, archiveWork, deleteWork, milestone, f
 import { saveSetting, deleteSetting, reorder, resetPassword, settingsLock } from './management.mjs';
 import { orderSchema, dictionarySchema } from './validation.mjs';
 import { registerAssistant } from './assistant.mjs';
+import { listIterations, saveIteration, changeIterationMembers, deleteIteration } from './iterations.mjs';
 
 const iso = value => value?.replace(' ', 'T');
 const workKind = value => { assert(['requirement','task'].includes(value),400,'事项类型无效'); return value; };
@@ -46,8 +47,14 @@ export function createApp(options = {}) {
     const activities=(await rows('SELECT a.* FROM wb_activities a JOIN wb_works w ON w.id=a.work_id WHERE w.deleted_at IS NULL ORDER BY a.created_at DESC,a.id DESC LIMIT 5000')).map(item=>({id:item.id,kind:item.kind,workId:item.work_id,actorId:item.actor_id,text:item.text,changes:json(item.changes),createdAt:iso(item.created_at)}));
     const requirements=works.filter(item=>!Object.hasOwn(item,'milestones'));
     const tasks=works.filter(item=>Object.hasOwn(item,'milestones'));
-    res.json({people,platforms,dictionary,requirements,tasks,activities,notices:await notices(req.user.id)});
+    res.json({people,platforms,dictionary,requirements,tasks,activities,iterations:await listIterations(),notices:await notices(req.user.id)});
   });
+
+  app.get('/api/iterations',async(_req,res)=>res.json(await listIterations()));
+  app.post('/api/iterations',async(req,res)=>res.status(201).json(await saveIteration(req.user,req.body)));
+  app.put('/api/iterations/:id',async(req,res)=>res.json(await saveIteration(req.user,req.body,req.params.id)));
+  app.post('/api/iterations/:id/items',async(req,res)=>res.json(await changeIterationMembers(req.user,req.params.id,req.body)));
+  app.delete('/api/iterations/:id',async(req,res)=>res.json(await deleteIteration(req.user,req.params.id)));
 
   app.get('/api/works/:kind',async (req,res)=>{
     const kind=workKind(req.params.kind);

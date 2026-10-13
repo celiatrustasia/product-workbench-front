@@ -4,11 +4,12 @@ import { Badge, Button, Dropdown, Form, Input, Layout, Menu, message, Modal, Ale
 import {
   AppstoreOutlined, BellOutlined, BookOutlined, DatabaseOutlined, GlobalOutlined, LeftOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined, SettingOutlined, TeamOutlined,
-  UnorderedListOutlined,
+  UnorderedListOutlined, CalendarOutlined,
 } from '@ant-design/icons';
 import { useWorkspace } from './data/workspace';
 import { Brand, PersonAvatar } from './components/ui';
 import { isNoticeRead, workCode } from './utils';
+import Iterations from './views/Iterations';
 import Dashboard from './views/Dashboard';
 import WorkList from './views/WorkList';
 import WorkDetail from './views/WorkDetail';
@@ -19,7 +20,7 @@ import { getBreadcrumbItems, managementNavigation, managementParent, primaryNavi
 
 const primaryNav = primaryNavigation.map(item => ({ ...item, icon: {
   '/': <AppstoreOutlined />, '/requirements': <DatabaseOutlined />,
-  '/tasks': <UnorderedListOutlined />, '/notifications': <BellOutlined />,
+  '/iterations': <CalendarOutlined />, '/tasks': <UnorderedListOutlined />, '/notifications': <BellOutlined />,
 }[item.key] }));
 const managementNav = managementNavigation.map(item => ({ ...item, icon: {
   '/platforms': <GlobalOutlined />, '/people': <TeamOutlined />, '/dictionaries': <BookOutlined />,
@@ -61,7 +62,7 @@ function PasswordPanel({ onDone, initial = false }: { onDone?: () => void; initi
 }
 
 function Shell() {
-  const { data, user, signOut, resetPreview, isPreview, error, retry } = useWorkspace();
+  const { data, user, signOut, resetPreview, isPreview, isVisitor, error, retry } = useWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -72,7 +73,7 @@ function Shell() {
   const unread = data.notices.filter(n => !isNoticeRead(n, user!.id) && n.recipientIds.includes(user!.id)).length;
   const selected = '/' + (location.pathname.split('/')[1] || '');
   const detailId = location.pathname.split('/')[2];
-  const detailTitle = (selected === '/requirements' ? data.requirements : data.tasks).find(item => item.id === detailId)?.title;
+  const detailTitle = selected === '/iterations' ? data.iterations?.find(item => item.id === detailId)?.name : (selected === '/requirements' ? data.requirements : data.tasks).find(item => item.id === detailId)?.title;
   const breadcrumbs = getBreadcrumbItems(location.pathname, detailTitle);
   const searchOptions = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -83,7 +84,7 @@ function Shell() {
 
   const menuItems = [
     ...primaryNav.map(item => ({ ...item, label: item.key === '/notifications' ? <span className="nav-notice">{item.label}{unread > 0 && <i>{unread}</i>}</span> : item.label })),
-    ...(isAdmin ? [{ ...managementParent, icon: <SettingOutlined />, children: managementNav }] : []),
+    ...(isAdmin || isVisitor ? [{ ...managementParent, icon: <SettingOutlined />, children: managementNav }] : []),
   ];
   const renderSide = (compact: boolean) => <><div className="side-brand"><Brand compact={compact} /></div><Menu className="side-menu" mode="inline" inlineCollapsed={compact} defaultOpenKeys={compact ? [] : [managementParent.key]} selectedKeys={[selected]} items={menuItems} onClick={({ key }) => { if (key !== managementParent.key) navigate(key); setMobileMenu(false); }} /></>;
 
@@ -92,13 +93,13 @@ function Shell() {
     {item.path ? <Link className="breadcrumb-ancestor" to={item.path}>{item.title}</Link> : <span className={index === breadcrumbs.length - 1 ? 'breadcrumb-current' : 'breadcrumb-ancestor'} aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined} title={item.title}>{item.title}</span>}
   </Fragment>)}</nav>;
 
-  return <Layout className="app-shell"><Layout.Sider className="desktop-side" width={220} collapsedWidth={68} collapsed={collapsed} theme="light">{renderSide(collapsed)}</Layout.Sider>{mobileMenu && <div className="mobile-overlay" onClick={() => setMobileMenu(false)}><div className="mobile-drawer" onClick={event => event.stopPropagation()}>{renderSide(false)}</div></div>}<Layout className="main-layout"><Layout.Header className="app-header"><div className="header-left"><Button className="desktop-collapse" type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} /><Button className="mobile-toggle" type="text" icon={<MenuUnfoldOutlined />} onClick={() => setMobileMenu(true)} />{breadcrumb}</div><div className="header-actions"><Dropdown menu={{ items: searchOptions.map(item => ({ key: item.id, label: <div className="search-result"><strong>{item.title}</strong><small>{workCode(item)}</small></div>, onClick: () => { navigate(`/${item.kind === 'requirement' ? 'requirements' : 'tasks'}/${item.id}`); setSearch(''); } })) }} open={searchOptions.length > 0 && search.length > 0} trigger={['click']}><Input className="global-search" prefix={<SearchOutlined />} placeholder="搜索需求、任务" value={search} onChange={event => setSearch(event.target.value)} onPressEnter={() => { const target = /^T\d/i.test(search.trim()) || (searchOptions.length > 0 && searchOptions.every(item => item.kind === 'task')) ? '/tasks' : '/requirements'; navigate(`${target}?search=${encodeURIComponent(search)}`); setSearch(''); }} /></Dropdown><Button className="header-bell" type="text" onClick={() => navigate('/notifications')} icon={<Badge dot={unread > 0}><BellOutlined /></Badge>} aria-label="通知中心" /><Dropdown trigger={['click']} menu={{ items: [{ key: 'profile', label: `${user?.name} · ${user?.role}`, disabled: true }, ...(isPreview ? [{ key: 'reset', label: '重置预览数据', onClick: () => Modal.confirm({ title: '重置预览数据？', content: '当前浏览器中新增或修改的内容将恢复为初始示例。', onOk: resetPreview }) }] : [{ key: 'password', label: '修改密码', onClick: () => setPasswordOpen(true) }]), { type: 'divider' }, { key: 'logout', label: '退出登录', onClick: async () => { try { await signOut(); navigate('/login'); } catch (error) { message.error(error instanceof Error ? error.message : '退出失败'); } } }] }}><button className="avatar-button" aria-label="账号菜单"><PersonAvatar person={user} /></button></Dropdown></div></Layout.Header><Layout.Content className="app-content">{error && <Alert type="warning" title={error} action={<Button onClick={retry}>重试</Button>} />}<Modal open={passwordOpen} footer={null} onCancel={() => setPasswordOpen(false)} destroyOnHidden><PasswordPanel onDone={() => setPasswordOpen(false)} /></Modal><Routes><Route path="/" element={<Dashboard />} /><Route path="/requirements" element={<WorkList kind="requirement" />} /><Route path="/requirements/:id" element={<WorkDetail kind="requirement" />} /><Route path="/tasks" element={<WorkList kind="task" />} /><Route path="/tasks/:id" element={<WorkDetail kind="task" />} /><Route path="/notifications" element={<Notifications />} /><Route path="/platforms" element={isAdmin ? <Management kind="platforms" /> : <Navigate to="/" />} /><Route path="/people" element={isAdmin ? <Management kind="people" /> : <Navigate to="/" />} /><Route path="/dictionaries" element={isAdmin ? <Management kind="dictionaries" /> : <Navigate to="/" />} /><Route path="*" element={<Navigate to="/" />} /></Routes></Layout.Content></Layout></Layout>;
+  return <Layout className="app-shell"><Layout.Sider className="desktop-side" width={220} collapsedWidth={68} collapsed={collapsed} theme="light">{renderSide(collapsed)}</Layout.Sider>{mobileMenu && <div className="mobile-overlay" onClick={() => setMobileMenu(false)}><div className="mobile-drawer" onClick={event => event.stopPropagation()}>{renderSide(false)}</div></div>}<Layout className="main-layout"><Layout.Header className="app-header"><div className="header-left"><Button className="desktop-collapse" type="text" icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setCollapsed(!collapsed)} /><Button className="mobile-toggle" type="text" icon={<MenuUnfoldOutlined />} onClick={() => setMobileMenu(true)} />{breadcrumb}</div><div className="header-actions"><Dropdown menu={{ items: searchOptions.map(item => ({ key: item.id, label: <div className="search-result"><strong>{item.title}</strong><small>{workCode(item)}</small></div>, onClick: () => { navigate(`/${item.kind === 'requirement' ? 'requirements' : 'tasks'}/${item.id}`); setSearch(''); } })) }} open={searchOptions.length > 0 && search.length > 0} trigger={['click']}><Input className="global-search" prefix={<SearchOutlined />} placeholder="搜索需求、任务" value={search} onChange={event => setSearch(event.target.value)} onPressEnter={() => { const target = /^T\d/i.test(search.trim()) || (searchOptions.length > 0 && searchOptions.every(item => item.kind === 'task')) ? '/tasks' : '/requirements'; navigate(`${target}?search=${encodeURIComponent(search)}`); setSearch(''); }} /></Dropdown><Button className="header-bell" type="text" onClick={() => navigate('/notifications')} icon={<Badge dot={unread > 0}><BellOutlined /></Badge>} aria-label="通知中心" />{isVisitor ? <span className="visitor-badge">访客 · 只读演示</span> : <Dropdown trigger={['click']} menu={{ items: [{ key: 'profile', label: `${user?.name} · ${user?.role}`, disabled: true }, ...(isPreview ? [{ key: 'reset', label: '重置预览数据', onClick: () => Modal.confirm({ title: '重置预览数据？', content: '当前浏览器中新增或修改的内容将恢复为初始示例。', onOk: resetPreview }) }] : [{ key: 'password', label: '修改密码', onClick: () => setPasswordOpen(true) }]), { type: 'divider' }, { key: 'logout', label: '退出登录', onClick: async () => { try { await signOut(); navigate('/login'); } catch (error) { message.error(error instanceof Error ? error.message : '退出失败'); } } }] }}><button className="avatar-button" aria-label="账号菜单"><PersonAvatar person={user} /></button></Dropdown>}</div></Layout.Header><Layout.Content className="app-content">{isVisitor && <div className="visitor-banner"><span>你正在查看演示工作台，内容均为虚构数据，仅供浏览。</span><a href="/#/login">进入正式工作台</a></div>}{error && <Alert type="warning" title={error} action={<Button onClick={retry}>重试</Button>} />}<Modal open={passwordOpen} footer={null} onCancel={() => setPasswordOpen(false)} destroyOnHidden><PasswordPanel onDone={() => setPasswordOpen(false)} /></Modal><Routes><Route path="/" element={<Dashboard />} /><Route path="/requirements" element={<WorkList kind="requirement" />} /><Route path="/requirements/:id" element={<WorkDetail kind="requirement" />} /><Route path="/tasks" element={<WorkList kind="task" />} /><Route path="/tasks/:id" element={<WorkDetail kind="task" />} /><Route path="/iterations" element={<Iterations />} /><Route path="/iterations/:id" element={<Iterations />} /><Route path="/notifications" element={<Notifications />} /><Route path="/platforms" element={isAdmin || isVisitor ? <Management kind="platforms" /> : <Navigate to="/" />} /><Route path="/people" element={isAdmin || isVisitor ? <Management kind="people" /> : <Navigate to="/" />} /><Route path="/dictionaries" element={isAdmin || isVisitor ? <Management kind="dictionaries" /> : <Navigate to="/" />} /><Route path="*" element={<Navigate to="/" />} /></Routes></Layout.Content></Layout></Layout>;
 }
 
 export default function Root() {
-  const { user, loading, error, retry } = useWorkspace();
+  const { user, loading, error, retry, isVisitor } = useWorkspace();
   if (loading) return <main className="account-page"><Spin size="large" /></main>;
   if (error && !user) return <main className="account-page"><section className="account-form"><Brand /><Alert type="error" title="后端服务连接失败" description={error} /><Button onClick={retry}>重新连接</Button></section></main>;
   if (user?.mustChangePassword) return <main className="account-page"><PasswordPanel initial /></main>;
-  return <><Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>{user && <AiAssistant key={user.id} />}</>;
+  return <><Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>{user && !isVisitor && <AiAssistant key={user.id} />}</>;
 }

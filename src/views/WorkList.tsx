@@ -12,7 +12,7 @@ import { canEditAll, compareWorkDefault, dateCellHint, dueLabel, focusReasons, f
 
 type Work = Requirement | Task;
 export default function WorkList({ kind }: { kind: WorkKind }) {
-  const { data, user, deleteWork } = useWorkspace();
+  const { data, user, deleteWork, isVisitor } = useWorkspace();
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -21,6 +21,7 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
   const [status, setStatus] = useState<string[]>(params.getAll('status'));
   const [platform, setPlatform] = useState('');
   const [priority, setPriority] = useState('');
+  const [iteration, setIteration] = useState(params.get('iteration') || '');
   const [owner, setOwner] = useState('');
   const [participant, setParticipant] = useState('');
   const [requirement, setRequirement] = useState(params.get('requirement') || '');
@@ -31,10 +32,10 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Work>();
   const task = kind === 'task';
-  const isAdmin = user?.access === '管理员';
+  const isAdmin = !isVisitor && user?.access === '管理员';
   const items = task ? data.tasks : data.requirements;
   const statuses = task ? taskStatuses : requirementStatuses;
-  useEffect(() => { setSearch(params.get('search') || ''); setStatus(params.getAll('status')); setWeekly(params.get('weekly') || ''); setRequirement(params.get('requirement') || ''); if (params.get('requirement')) setMoreFilters(true); setPage(1); if (params.get('new') === '1') { setEditing(undefined); setFormOpen(true); } }, [params]);
+  useEffect(() => { setSearch(params.get('search') || ''); setStatus(params.getAll('status')); setWeekly(params.get('weekly') || ''); setRequirement(params.get('requirement') || ''); setIteration(params.get('iteration') || ''); if (params.get('requirement')) setMoreFilters(true); setPage(1); if (!isVisitor && params.get('new') === '1') { setEditing(undefined); setFormOpen(true); } }, [params]);
   const closeForm = () => { setFormOpen(false); setEditing(undefined); if (params.has('new')) { const next = new URLSearchParams(params); next.delete('new'); setParams(next, { replace: true }); } };
   const create = () => { setEditing(undefined); setFormOpen(true); };
   const edit = (item: Work) => { setEditing(item); setFormOpen(true); };
@@ -42,13 +43,14 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
     if (archive === 'active' && item.archived || archive === 'archived' && !item.archived) return false;
     if (search && !`${item.title}${workCode(item)}${item.description}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (status.length && !status.includes(item.status) || platform && item.platformId !== platform || priority && item.priority !== priority || owner && item.ownerId !== owner) return false;
+    if (iteration && (iteration === 'none' ? Boolean(item.iterationId) : item.iterationId !== iteration)) return false;
     if (participant && !item.participantIds.includes(participant)) return false;
     if (task && requirement && (item as Task).requirementId !== requirement) return false;
     if (weekly && (focusReasons(item).length > 0) !== (weekly === 'yes')) return false;
     return true;
-  }).sort(compareWorkDefault), [items, archive, search, status, platform, priority, owner, participant, weekly, task, requirement]);
-  const reset = () => { setSearch(''); setStatus([]); setPlatform(''); setPriority(''); setOwner(''); setParticipant(''); setRequirement(''); setWeekly(''); setArchive('active'); setPage(1); setParams({}); };
-  const advancedCount = Number(Boolean(priority)) + Number(task && Boolean(requirement));
+  }).sort(compareWorkDefault), [items, archive, search, status, platform, priority, owner, participant, weekly, task, requirement, iteration]);
+  const reset = () => { setSearch(''); setStatus([]); setPlatform(''); setPriority(''); setIteration(''); setOwner(''); setParticipant(''); setRequirement(''); setWeekly(''); setArchive('active'); setPage(1); setParams({}); };
+  const advancedCount = Number(Boolean(priority)) + Number(Boolean(iteration)) + Number(task && Boolean(requirement));
   const peopleOptions = data.people.map(item => ({ value: item.id, label: item.name }));
   const linkedTasks = useMemo(() => {
     const counts = new Map<string, number>();
@@ -70,6 +72,7 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
   const columns: TableColumnsType<Work> = [
     { title: task ? '事项' : '需求', dataIndex: 'title', width: 210, render: (_, item) => <div className="list-title"><strong>{item.title}</strong><small>{workCode(item)}{task && (item as Task).requirementId && <span> · 关联需求</span>}</small></div>, sorter: (a, b) => workCode(a).localeCompare(workCode(b), undefined, { numeric: true }), sortDirections: ['descend', 'ascend'] },
     { title: '平台', dataIndex: 'platformId', width: 100, render: value => platformName(data, value) },
+    { title: '所属迭代', width: 140, ellipsis: true, render: (_, item) => item.iterationId ? <a onClick={event => { event.stopPropagation(); navigate(`/iterations/${item.iterationId}`); }}>{data.iterations?.find(record => record.id === item.iterationId)?.name || '—'}</a> : '—' },
     { title: '状态', dataIndex: 'status', width: 100, render: value => <StatusTag status={value} /> },
     { title: '优先级', dataIndex: 'priority', width: 80, render: value => <PriorityTag priority={value} />, sorter: (a, b) => a.priority.localeCompare(b.priority) },
     { title: '负责人', dataIndex: 'ownerId', width: 110, render: value => <PeopleGroup ids={value ? [value] : []} data={data} /> },
@@ -77,13 +80,13 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
     { title: task ? '最终截止时间' : '目标上线时间', width: 132, render: (_, item) => { const hint = dateCellHint(item); return <span className={hint?.includes('逾期') ? 'danger-text' : ''}>{formatDate(task ? (item as Task).dueAt : (item as Requirement).targetAt)}{hint && <small className="cell-sub">{hint}</small>}</span>; } },
     { title: task ? '关联需求数' : '关联任务数', width: 100, align: 'center', fixed: 'right', render: (_, item) => relatedLink(item) },
     { title: '重点关注', width: 124, fixed: 'right', render: (_, item) => <WeeklyFocusSwitch kind={kind} item={item} /> },
-    { title: '操作', width: 146, fixed: 'right', render: (_, item) => <span className="table-actions">{canEditAll(item, user?.id, isAdmin) && <Button size="small" type="link" icon={<EditOutlined />} onClick={event => { event.stopPropagation(); edit(item); }}>编辑</Button>}{isAdmin && <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={event => { event.stopPropagation(); remove(item); }}>删除</Button>}</span> },
+    { title: '操作', width: 146, fixed: 'right', render: (_, item) => <span className="table-actions">{!isVisitor && canEditAll(item, user?.id, isAdmin) && <Button size="small" type="link" icon={<EditOutlined />} onClick={event => { event.stopPropagation(); edit(item); }}>编辑</Button>}{isAdmin && <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={event => { event.stopPropagation(); remove(item); }}>删除</Button>}</span> },
   ];
   const pageSize = 10;
   const safePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize)));
   const boardColumns = statuses.map(current => ({ status: current, items: filtered.filter(item => item.status === current) }));
 
-  return <div className="page work-list-page"><PageHeading title={task ? '任务管理' : '需求池'} action={<Button type="primary" icon={<PlusOutlined />} onClick={create}>新建{task ? '任务' : '需求'}</Button>} />
+  return <div className="page work-list-page"><PageHeading title={task ? '任务管理' : '需求池'} action={!isVisitor && <Button type="primary" icon={<PlusOutlined />} onClick={create}>新建{task ? '任务' : '需求'}</Button>} />
     <div className="list-toolbar"><div className="list-toolbar-left"><Segmented value={view} onChange={value => setView(value as '表格' | '看板')} options={[{ value: '表格', label: <><UnorderedListOutlined /> 表格</> }, { value: '看板', label: <><AppstoreOutlined /> 看板</> }]} /><span className="list-count">共 {filtered.length} 项</span></div>{(archive === 'archived' || items.some(item => item.archived)) && <Button type="link" onClick={() => { setArchive(archive === 'active' ? 'archived' : 'active'); setPage(1); }}>{archive === 'archived' ? '返回正常列表' : `已归档（${items.filter(item => item.archived).length}）`}</Button>}</div>
     <div className="filter-bar">
       <div className="filter-field filter-keyword"><label htmlFor="filter-keyword">关键词</label><Input id="filter-keyword" prefix={<SearchOutlined />} placeholder={`搜索${task ? '任务' : '需求'}名称或编号`} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} className="filter-search" allowClear /></div>
@@ -93,12 +96,12 @@ export default function WorkList({ kind }: { kind: WorkKind }) {
       <div className="filter-field"><label htmlFor="filter-participant">参与人</label><Select id="filter-participant" value={participant || undefined} placeholder="全部" allowClear showSearch={{ optionFilterProp: 'label' }} onChange={value => { setParticipant(value || ''); setPage(1); }} options={peopleOptions} /></div>
       <div className="filter-field"><label htmlFor="filter-weekly">重点关注</label><Select id="filter-weekly" value={weekly || undefined} placeholder="全部" allowClear onChange={value => { setWeekly(value || ''); setPage(1); }} options={[{ value: 'yes', label: '是' }, { value: 'no', label: '否' }]} /></div>
       <div className="filter-actions"><Button type="text" className={advancedCount ? 'filters-active' : ''} icon={moreFilters ? <UpOutlined /> : <DownOutlined />} aria-expanded={moreFilters} aria-controls="advanced-filters" onClick={() => setMoreFilters(value => !value)}>{moreFilters ? '收起筛选' : '更多筛选'}{advancedCount > 0 && `（${advancedCount}）`}</Button><Button className="filter-reset" type="link" onClick={reset}>重置</Button></div>
-      {moreFilters && <div className="filter-advanced" id="advanced-filters">
+      {moreFilters && <div className="filter-advanced" id="advanced-filters"><div className="filter-field"><label htmlFor="filter-iteration">所属迭代</label><Select id="filter-iteration" value={iteration || undefined} placeholder="全部" allowClear onChange={value => { setIteration(value || ''); setPage(1); }} options={[{ value: 'none', label: '未分配' }, ...(data.iterations || []).map(record => ({ value: record.id, label: record.name }))]} /></div>
         <div className="filter-field"><label htmlFor="filter-priority">优先级</label><Select id="filter-priority" value={priority || undefined} placeholder="全部" allowClear onChange={value => { setPriority(value || ''); setPage(1); }} options={['P1', 'P2', 'P3', 'P4'].map(value => ({ value, label: `${value} · ${priorityNames[value]}` }))} optionRender={option => <PriorityLabel priority={String(option.value)} />} labelRender={option => <PriorityLabel priority={String(option.value)} />} /></div>
         {task && <div className="filter-field"><label htmlFor="filter-requirement">关联需求</label><Select id="filter-requirement" value={requirement || undefined} placeholder="全部" allowClear showSearch={{ optionFilterProp: 'label' }} onChange={value => { setRequirement(value || ''); setPage(1); }} options={data.requirements.map(item => ({ value: item.id, label: `${workCode(item)} · ${item.title}${item.archived ? '（已归档）' : ''}` }))} /></div>}
       </div>}
     </div>
-    {view === '表格' ? <><section className="surface table-surface"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={columns} dataSource={filtered} pagination={{ pageSize, current: safePage, onChange: setPage, showSizeChanger: false, hideOnSinglePage: true, placement: ['bottomEnd'] }} onRow={item => ({ onClick: () => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`) })} rowClassName="clickable-row" scroll={{ x: 1214 }} locale={{ emptyText: <Empty description="没有找到符合条件的事项" /> }} /></section><div className="mobile-item-list">{filtered.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <article className="mobile-work-item" key={item.id}><button className="mobile-work-item-link" onClick={() => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`)}><div className="mobile-item-top"><span>{workCode(item)}</span><PriorityTag priority={item.priority} /></div><strong>{item.title}</strong><div className="mobile-item-meta"><span>{platformName(data, item.platformId)}</span><StatusTag status={item.status} /><span>{formatDate(task ? (item as Task).dueAt : (item as Requirement).targetAt)}</span></div></button><div className="mobile-item-people"><span>负责人 <PeopleGroup ids={item.ownerId ? [item.ownerId] : []} data={data} /></span><span>参与人 {item.participantIds.length ? <PeopleGroup ids={item.participantIds} data={data} /> : '—'}</span></div><div className="mobile-item-foot"><span className="mobile-related-count">关联{task ? '需求' : '任务'}数 {relatedLink(item)}</span><WeeklyFocusSwitch kind={kind} item={item} /></div></article>)}{filtered.length === 0 && <Empty description="没有找到符合条件的事项" />}<Pagination current={safePage} pageSize={pageSize} total={filtered.length} onChange={setPage} hideOnSinglePage /></div></> : <div className="kanban-board">{boardColumns.map(col => <section className="kanban-column" key={col.status}><div className="kanban-column-head"><span><StatusTag status={col.status} /></span><em>{col.items.length}</em></div><div className="kanban-cards">{col.items.map(item => <button key={item.id} className="kanban-card" onClick={() => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`)}><div className="kanban-card-top"><span>{workCode(item)}</span><PriorityTag priority={item.priority} /></div><strong>{item.title}</strong><small>{platformName(data, item.platformId)} · {dueLabel(item)}</small><div className="kanban-card-foot"><FocusTags item={item} /><PeopleGroup ids={item.ownerId ? [item.ownerId] : []} data={data} /></div></button>)}{col.items.length === 0 && <div className="kanban-empty">暂无事项</div>}</div></section>)}</div>}
+    {view === '表格' ? <><section className="surface table-surface"><Table className="compact-table" tableLayout="fixed" rowKey="id" columns={isVisitor ? columns.filter(column => column.title !== '操作') : columns} dataSource={filtered} pagination={{ pageSize, current: safePage, onChange: setPage, showSizeChanger: false, hideOnSinglePage: true, placement: ['bottomEnd'] }} onRow={item => ({ onClick: () => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`) })} rowClassName="clickable-row" scroll={{ x: 1354 }} locale={{ emptyText: <Empty description="没有找到符合条件的事项" /> }} /></section><div className="mobile-item-list">{filtered.slice((safePage - 1) * pageSize, safePage * pageSize).map(item => <article className="mobile-work-item" key={item.id}><button className="mobile-work-item-link" onClick={() => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`)}><div className="mobile-item-top"><span>{workCode(item)}</span><PriorityTag priority={item.priority} /></div><strong>{item.title}</strong><div className="mobile-item-meta"><span>{platformName(data, item.platformId)}</span><StatusTag status={item.status} /><span>{formatDate(task ? (item as Task).dueAt : (item as Requirement).targetAt)}</span></div></button><div className="mobile-item-people"><span>负责人 <PeopleGroup ids={item.ownerId ? [item.ownerId] : []} data={data} /></span><span>参与人 {item.participantIds.length ? <PeopleGroup ids={item.participantIds} data={data} /> : '—'}</span></div><div className="mobile-item-foot"><span className="mobile-related-count">关联{task ? '需求' : '任务'}数 {relatedLink(item)}</span><WeeklyFocusSwitch kind={kind} item={item} /></div></article>)}{filtered.length === 0 && <Empty description="没有找到符合条件的事项" />}<Pagination current={safePage} pageSize={pageSize} total={filtered.length} onChange={setPage} hideOnSinglePage /></div></> : <div className="kanban-board">{boardColumns.map(col => <section className="kanban-column" key={col.status}><div className="kanban-column-head"><span><StatusTag status={col.status} /></span><em>{col.items.length}</em></div><div className="kanban-cards">{col.items.map(item => <button key={item.id} className="kanban-card" onClick={() => navigate(`/${task ? 'tasks' : 'requirements'}/${item.id}`)}><div className="kanban-card-top"><span>{workCode(item)}</span><PriorityTag priority={item.priority} /></div><strong>{item.title}</strong><small>{platformName(data, item.platformId)} · {dueLabel(item)}</small><div className="kanban-card-foot"><FocusTags item={item} /><PeopleGroup ids={item.ownerId ? [item.ownerId] : []} data={data} /></div></button>)}{col.items.length === 0 && <div className="kanban-empty">暂无事项</div>}</div></section>)}</div>}
     <WorkForm kind={kind} open={formOpen} initial={editing} onClose={closeForm} onSaved={id => { if (!editing) navigate(`/${task ? 'tasks' : 'requirements'}/${id}`); }} />
   </div>;
 }
