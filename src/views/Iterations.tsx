@@ -23,6 +23,7 @@ export default function Iterations() {
   const [itemType, setItemType] = useState('全部');
   const [selected, setSelected] = useState<React.Key[]>([]);
   const [form] = Form.useForm();
+  const startDate = Form.useWatch<dayjs.Dayjs>('startDate', form);
   const [editing, setEditing] = useState<Iteration>();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,7 +51,7 @@ export default function Iterations() {
 
   const edit = (item?: Iteration) => {
     setEditing(item); form.resetFields();
-    form.setFieldsValue(item ? { ...item, dates: [dayjs(item.startDate), dayjs(item.endDate)] } : { ownerId: user?.id, dates: [dayjs(), dayjs().add(13, 'day')] });
+    form.setFieldsValue(item ? { ...item, startDate: dayjs(item.startDate), endDate: dayjs(item.endDate) } : { ownerId: user?.id, startDate: dayjs(), endDate: dayjs().add(13, 'day') });
     setOpen(true);
   };
   const attempt = async (action: () => Promise<unknown>, success: string) => {
@@ -59,9 +60,9 @@ export default function Iterations() {
     catch (error) { message.error(error instanceof Error ? error.message : '操作失败'); return false; }
     finally { setBusy(false); }
   };
-  const save = async (values: { name: string; goal?: string; dates: [dayjs.Dayjs, dayjs.Dayjs]; ownerId: string }) => {
+  const save = async (values: { name: string; goal?: string; startDate: dayjs.Dayjs; endDate: dayjs.Dayjs; ownerId: string }) => {
     const ok = await attempt(async () => {
-      const savedId = await saveIteration({ id: editing?.id || '', name: values.name.trim(), goal: values.goal || '', startDate: values.dates[0].format('YYYY-MM-DD'), endDate: values.dates[1].format('YYYY-MM-DD'), ownerId: values.ownerId, status: editing?.status || '待开始', revision: editing?.revision, createdBy: editing?.createdBy || user!.id, createdAt: editing?.createdAt || '' });
+      const savedId = await saveIteration({ id: editing?.id || '', name: values.name.trim(), goal: values.goal || '', startDate: values.startDate.format('YYYY-MM-DD'), endDate: values.endDate.format('YYYY-MM-DD'), ownerId: values.ownerId, status: editing?.status || '待开始', revision: editing?.revision, createdBy: editing?.createdBy || user!.id, createdAt: editing?.createdAt || '' });
       setOpen(false); navigate(`/iterations/${savedId}`);
     }, editing ? '迭代已更新' : '迭代已创建');
     return ok;
@@ -87,7 +88,10 @@ export default function Iterations() {
   ];
   const drawer = <Drawer title={editing ? '编辑迭代' : '新建迭代'} open={open} onClose={() => setOpen(false)} size={520} destroyOnHidden footer={<div className="drawer-footer"><Button onClick={() => setOpen(false)}>取消</Button><Button type="primary" loading={busy} onClick={() => form.submit()}>保存迭代</Button></div>}><Form form={form} layout="vertical" requiredMark onFinish={save} className="work-form">
     <Form.Item name="name" label="迭代名称" rules={[{ required: true, whitespace: true, message: '请输入迭代名称' }]}><Input maxLength={100} placeholder="例如：产品体验优化 · 第 3 期" /></Form.Item>
-    <Form.Item name="dates" label="起止日期" rules={[{ required: true, message: '请选择起止日期' }]}><DatePicker.RangePicker className="full-width" /></Form.Item>
+    <div className="form-grid">
+      <Form.Item name="startDate" label="开始日期" rules={[{ required: true, message: '请选择开始日期' }]}><DatePicker className="full-width" format="YYYY-MM-DD" placeholder="选择开始日期" /></Form.Item>
+      <Form.Item name="endDate" label="结束日期" dependencies={['startDate']} rules={[{ required: true, message: '请选择结束日期' }, ({ getFieldValue }) => ({ validator: (_, value: dayjs.Dayjs | undefined) => !value || !getFieldValue('startDate') || !value.isBefore(getFieldValue('startDate'), 'day') ? Promise.resolve() : Promise.reject(new Error('结束日期不能早于开始日期')) })]}><DatePicker className="full-width" format="YYYY-MM-DD" placeholder="选择结束日期" disabledDate={date => Boolean(startDate && date.isBefore(startDate, 'day'))} /></Form.Item>
+    </div>
     <Form.Item name="ownerId" label="负责人" rules={[{ required: true, message: '请选择负责人' }]}><Select options={data.people.filter(person => person.active || person.id === editing?.ownerId).map(person => ({ value: person.id, label: person.name }))} /></Form.Item>
     <Form.Item name="goal" label="迭代目标"><Input.TextArea rows={5} maxLength={2000} placeholder="希望本次迭代交付什么？" /></Form.Item>
   </Form></Drawer>;
