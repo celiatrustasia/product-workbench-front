@@ -281,6 +281,8 @@ body{background:var(--page-bg)}
 /* Iteration planning and the isolated public demonstration. */
 .visitor-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 28px;background:#e8f0ff;border-bottom:1px solid #d4e2fc;color:#42618c;font-size:13px}
 .visitor-banner a{white-space:nowrap;color:#2563eb}.visitor-badge{padding:5px 12px;border-radius:20px;background:#e8f0ff;color:#315aa3;white-space:nowrap;font-size:12px}
+.visitor-banner-copy{display:flex;flex-direction:column;gap:4px;min-width:0;line-height:1.6}.visitor-banner-copy strong{color:#315aa3;font-weight:500}
+@media(max-width:760px){.visitor-banner{flex-direction:column;align-items:flex-start;gap:8px}}
 .iteration-list-toolbar{display:flex;gap:16px;align-items:center;margin-bottom:20px}.iteration-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
 .iteration-card{padding:24px;min-width:0}.iteration-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;font-size:12px;color:#6a7f9f}
 .iteration-name{display:block;font-size:20px;font-weight:650;color:#1b3359;margin-bottom:12px}.iteration-card p{color:#647692;line-height:1.7;min-height:48px;margin-bottom:20px;white-space:pre-wrap;overflow-wrap:anywhere}
