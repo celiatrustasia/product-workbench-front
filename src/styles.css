@@ -279,9 +279,9 @@ body{background:var(--page-bg)}
 .ai-settings-notice{margin:14px 0}.ai-settings-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
 @media(max-width:760px){.ai-assistant{right:12px;bottom:max(12px,env(safe-area-inset-bottom));gap:8px}.ai-panel{width:calc(100vw - 24px);max-width:none;height:min(610px,calc(100dvh - 94px))}.ai-header{padding:10px 12px}.ai-conversation{padding:14px 12px}.ai-composer{padding:10px 12px}.ai-launcher.ant-btn{height:42px;padding:0 16px}}
 /* Iteration planning and the isolated public demonstration. */
-.visitor-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 28px;background:#e8f0ff;border-bottom:1px solid #d4e2fc;color:#42618c;font-size:13px}
-.visitor-banner a{white-space:nowrap;color:#2563eb}.visitor-badge{padding:5px 12px;border-radius:20px;background:#e8f0ff;color:#315aa3;white-space:nowrap;font-size:12px}
-.visitor-banner-copy{display:flex;flex-direction:column;gap:4px;min-width:0;line-height:1.6}.visitor-banner-copy strong{color:#315aa3;font-weight:500}
+.visitor-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:12px 28px;background:#fff4e5;border-bottom:1px solid #ffdfb3;color:#8a531a;font-size:13px}
+.visitor-banner a{white-space:nowrap;color:#a95000}.visitor-banner a:hover{color:#874000;text-decoration:underline}.visitor-banner a:focus-visible{outline:2px solid #cb7a18;outline-offset:4px;border-radius:2px}.visitor-badge{padding:5px 12px;border-radius:20px;background:#e8f0ff;color:#315aa3;white-space:nowrap;font-size:12px}
+.visitor-banner-copy{flex:1;min-width:0;margin:0;line-height:1.7}
 @media(max-width:760px){.visitor-banner{flex-direction:column;align-items:flex-start;gap:8px}}
 .iteration-list-toolbar{display:flex;gap:16px;align-items:center;margin-bottom:20px}.iteration-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
 .iteration-card{padding:24px;min-width:0}.iteration-card-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;font-size:12px;color:#6a7f9f}
