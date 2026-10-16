@@ -7,9 +7,10 @@ export const aiProviders = {
   deepseek: { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' },
   qwen: { name: '通义千问（阿里云百炼）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
   openai: { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
+  kimi: { name: 'Kimi（月之暗面）', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
 };
 export const aiSettingsSchema = z.object({
-  provider: z.enum(['deepseek', 'qwen', 'openai']),
+  provider: z.enum(['deepseek', 'qwen', 'openai', 'kimi']),
   baseUrl: z.string().url().max(300),
   model: z.string().trim().regex(/^[a-zA-Z0-9._:/-]{1,100}$/),
   apiKey: z.string().trim().min(8).max(4096).regex(/^[^\s]+$/),
@@ -20,7 +21,8 @@ export const aiSettingsSchema = z.object({
     || /^[a-zA-Z0-9-]+\.(cn-beijing|ap-southeast-1|us-east-1|eu-central-1)\.maas\.aliyuncs\.com$/.test(url.hostname))
     && ['/compatible-mode/v1', '/compatible-mode/v1/'].includes(url.pathname);
   const openai = ['api.openai.com', 'sub2api.trustasia.cn'].includes(url.hostname) && ['/v1', '/v1/'].includes(url.pathname);
-  const allowedEndpoint = { deepseek, qwen, openai }[value.provider];
+  const kimi = ['api.moonshot.cn', 'api.moonshot.ai'].includes(url.hostname) && ['/v1', '/v1/'].includes(url.pathname);
+  const allowedEndpoint = { deepseek, qwen, openai, kimi }[value.provider];
   if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash || !allowedEndpoint) {
     ctx.addIssue({ code: 'custom', path: ['baseUrl'], message: '请使用所选服务商已支持的 HTTPS 接口地址' });
   }

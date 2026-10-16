@@ -8,6 +8,7 @@ import { completeJson, prepareAssistantWorks } from '../src/ai-engine.mjs';
 
 const settings = { provider: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', apiKey: 'test-only-secret' };
 const openaiSettings = { ...aiProviders.openai, provider: 'openai', apiKey: 'openai-test-only-secret' };
+const kimiSettings = { ...aiProviders.kimi, provider: 'kimi', apiKey: 'kimi-test-only-secret' };
 const context = { currentUser: { id: 'me' }, platforms: [{ id: 'p', name: 'CertCloud' }], people: [{ id: 'me' }, { id: 'other' }], dictionary: [{ group: 'requirementType', name: '优化' }], requirements: [{ id: 'existing' }] };
 const plan = works => ({ action: 'create', reply: '按你的信息创建。', works });
 
@@ -59,6 +60,106 @@ test('model endpoints reject key forwarding to untrusted hosts and URL credentia
     assert.equal(aiSettingsSchema.safeParse({ ...openaiSettings, baseUrl }).success, false);
   }
   assert.equal(aiSettingsSchema.safeParse({ ...settings, baseUrl: openaiSettings.baseUrl }).success, false);
+});
+
+test('Kimi configuration survives reopening, redacts keys and supports environment defaults', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workbench-kimi-test-'));
+  try {
+    const file = join(directory, 'ai.json');
+    const store = createAiSettings(file);
+    await store.save(kimiSettings);
+    const status = await createAiSettings(file).status();
+    assert.equal(status.provider, 'kimi');
+    assert.equal(status.model, 'kimi-k2.6');
+    assert.equal(status.baseUrl, 'https://api.moonshot.cn/v1');
+    assert.equal(status.providers.kimi.name, 'Kimi（月之暗面）');
+    assert.equal(JSON.stringify(status).includes(kimiSettings.apiKey), false);
+    assert.equal((await store.load()).apiKey, kimiSettings.apiKey);
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
+    const envStore = createAiSettings(file, { AI_PROVIDER: 'kimi', AI_API_KEY: 'kimi-environment-test-secret' });
+    assert.deepEqual(await envStore.load(), { provider: 'kimi', model: aiProviders.kimi.model, baseUrl: aiProviders.kimi.baseUrl, apiKey: 'kimi-environment-test-secret' });
+    await assert.rejects(envStore.save(kimiSettings), /环境变量管理/);
+    await assert.rejects(store.save({ ...kimiSettings, baseUrl: 'https://evil.example/v1' }));
+    assert.equal((await store.load()).apiKey, kimiSettings.apiKey);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('Kimi only accepts official regional endpoints, never other providers or credential-bearing URLs', () => {
+  for (const baseUrl of ['https://api.moonshot.cn/v1', 'https://api.moonshot.cn/v1/', 'https://api.moonshot.ai/v1', 'https://api.moonshot.ai/v1/']) {
+    assert.equal(aiSettingsSchema.safeParse({ ...kimiSettings, baseUrl }).success, true);
+    assert.equal(aiSettingsSchema.safeParse({ ...openaiSettings, baseUrl }).success, false);
+  }
+  for (const baseUrl of ['http://api.moonshot.cn/v1', 'https://api.moonshot.cn.evil.example/v1', 'https://user@api.moonshot.cn/v1', 'https://api.moonshot.cn:444/v1', 'https://api.moonshot.cn/v1?key=secret', 'https://api.moonshot.cn/v1#fragment', 'https://api.moonshot.cn', 'https://api.moonshot.cn/v1/chat/completions', 'https://127.0.0.1/v1', openaiSettings.baseUrl]) {
+    assert.equal(aiSettingsSchema.safeParse({ ...kimiSettings, baseUrl }).success, false);
+  }
+});
+
+test('Kimi JSON transport handles model-specific options and validates requirement/task plans', async () => {
+  const messages = [{ role: 'system', content: '仅输出 JSON。' }, { role: 'user', content: '创建一个需求及其关联任务' }];
+  const expected = plan([
+    { kind: 'requirement', title: '优化证书搜索', platformId: 'p', description: '增加证书筛选。' },
+    { kind: 'task', title: '实现证书筛选', platformId: 'p', requirementIndex: 0, participantIds: ['other'] },
+  ]);
+  for (const model of ['kimi-k2.5', 'kimi-k2.6', 'kimi-k3', 'moonshot-v1-8k', 'kimi-k2-turbo-preview']) {
+    const result = await completeJson({ ...kimiSettings, baseUrl: 'https://api.moonshot.cn/v1/', model }, messages, async (url, options) => {
+      assert.equal(url, 'https://api.moonshot.cn/v1/chat/completions');
+      assert.equal(options.headers.Authorization, `Bearer ${kimiSettings.apiKey}`);
+      assert.equal(options.redirect, 'error');
+      const body = JSON.parse(options.body);
+      assert.equal(body.model, model);
+      assert.deepEqual(body.messages, messages);
+      assert.deepEqual(body.response_format, { type: 'json_object' });
+      assert.equal(body.max_tokens, 4096);
+      assert.equal(body.stream, false);
+      for (const field of ['input', 'text', 'enable_thinking', 'temperature', 'top_p']) assert.equal(field in body, false);
+      if (['kimi-k2.5', 'kimi-k2.6'].includes(model)) assert.deepEqual(body.thinking, { type: 'disabled' });
+      else assert.equal('thinking' in body, false);
+      if (model === 'kimi-k3') assert.equal(body.reasoning_effort, 'low');
+      else assert.equal('reasoning_effort' in body, false);
+      return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(expected), reasoning_content: 'This is not the JSON response.' } }] });
+    });
+    const prepared = prepareAssistantWorks(result, context);
+    assert.deepEqual(prepared.issues, []);
+    assert.equal(prepared.prepared[0].kind, 'requirement');
+    assert.equal(prepared.prepared[0].value.ownerId, 'me');
+    assert.equal(prepared.prepared[0].value.priority, 'P2');
+    assert.equal(prepared.prepared[1].kind, 'task');
+    assert.equal(prepared.prepared[1].requirementIndex, 0);
+    assert.deepEqual(prepared.prepared[1].value.participantIds, ['other']);
+  }
+  await completeJson({ ...kimiSettings, baseUrl: 'https://api.moonshot.ai/v1' }, messages, async url => {
+    assert.equal(url, 'https://api.moonshot.ai/v1/chat/completions');
+    return Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] });
+  });
+});
+
+test('Kimi rejects incomplete or malformed output and hides secrets in provider errors', async () => {
+  const content = JSON.stringify(plan([{ kind: 'task', title: '不应创建', platformId: 'p' }]));
+  for (const result of [
+    { choices: [{ finish_reason: 'length', message: { content } }] },
+    { choices: [{ finish_reason: 'content_filter', message: { content } }] },
+    { choices: [{ finish_reason: 'tool_calls', message: { content } }] },
+    { choices: [{ finish_reason: 'stop', message: { content: '', reasoning_content: content } }] },
+    { choices: [{ finish_reason: 'stop', message: { content: 'invalid JSON' } }] },
+    { choices: [] },
+  ]) {
+    await assert.rejects(completeJson(kimiSettings, [], async () => Response.json(result)), { code: 'AI_BAD_RESPONSE' });
+  }
+  for (const status of [401, 403, 429, 500]) {
+    await assert.rejects(completeJson(kimiSettings, [], async () => Response.json({ error: { message: kimiSettings.apiKey } }, { status })), error => error.code === 'AI_PROVIDER_ERROR' && !error.message.includes(kimiSettings.apiKey));
+  }
+  await assert.rejects(completeJson(kimiSettings, [], async () => { throw new Error(kimiSettings.apiKey); }), error => error.code === 'AI_UNAVAILABLE' && !error.message.includes(kimiSettings.apiKey));
+});
+
+test('Qwen keeps its own thinking parameter when Kimi is added', async () => {
+  await completeJson({ ...aiProviders.qwen, provider: 'qwen', apiKey: 'qwen-test-only-secret' }, [{ role: 'user', content: '输出 JSON' }], async (url, options) => {
+    assert.equal(url, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions');
+    const body = JSON.parse(options.body);
+    assert.equal(body.enable_thinking, false);
+    assert.equal('thinking' in body, false);
+    assert.equal('reasoning_effort' in body, false);
+    return Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] });
+  });
 });
 
 test('authorized Responses gateway retains transport and secret protections', async () => {

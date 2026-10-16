@@ -16,7 +16,7 @@
 | [assistant-ui](https://github.com/assistant-ui/assistant-ui) | MIT | 另一套 React 聊天界面，适合深度定制；本项目无需引入第二套聊天 UI。 |
 | [AI SDK](https://ai-sdk.dev/providers/openai-compatible-providers) | Apache-2.0 | 可统一接入多个服务商，本次 Express 后端直接调用服务商接口，无需新增这层依赖。 |
 
-开源组件负责对话界面，不自带模型或免费模型额度。当前支持 DeepSeek、阿里云百炼的通义千问、OpenAI，需要对应服务商的 API Key，调用费用由服务商按用量收取。自建开放模型需要另外部署推理服务，当前版本不包含此项。
+开源组件负责对话界面，不自带模型或免费模型额度。当前支持 DeepSeek、阿里云百炼的通义千问、OpenAI、Kimi（月之暗面），需要对应服务商的 API Key，调用费用由服务商按用量收取。自建开放模型需要另外部署推理服务，当前版本不包含此项。
 
 ## 管理员配置
 
@@ -27,7 +27,11 @@
 
 每次打开设置都会重新读取当前后端的模型服务、名称和接口地址。密钥不回传；已配置时显示“API Key 已保存”，留空可继续使用。取消编辑后重新打开显示已保存配置。本地与线上使用各自的服务器配置，彼此不会自动覆盖。
 
-默认选项为 DeepSeek `deepseek-flash`、通义千问 `qwen-plus` 或 OpenAI `gpt-4.1-mini`。模型名称可修改，所选模型需支持相应接口及 JSON 模式。实际可用模型和余额以自己的服务商账号为准。接口地址限制为对应服务商已支持的 HTTPS 地址；阿里云支持官方兼容接口及其工作空间域名。
+默认选项为 DeepSeek `deepseek-flash`、通义千问 `qwen-plus`、OpenAI `gpt-4.1-mini` 或 Kimi `kimi-k2.6`。模型名称可修改，所选模型需支持相应接口及 JSON 模式。实际可用模型和余额以自己的服务商账号为准。接口地址限制为对应服务商已支持的 HTTPS 地址；阿里云支持官方兼容接口及其工作空间域名。
+
+Kimi 默认接口地址为 `https://api.moonshot.cn/v1`，也支持国际站 `https://api.moonshot.ai/v1`，使用与对应站点匹配的开放平台 API Key。选择 Kimi 后自动填入默认模型和地址；测试通过才保存，更换服务商时不会沿用其他服务商的 Key。Kimi 网页聊天账号或会员不能直接代替开放平台 API Key。
+
+后端使用 Kimi Chat Completions API 的 JSON 模式。`kimi-k2.5`、`kimi-k2.6` 使用 `thinking.type=disabled` 完成字段整理；`kimi-k3` 使用 `reasoning_effort=low`，不发送 K2 的思考开关。旧版 `moonshot-v1`、K2 Instruct 等模型不额外发送思考参数。只解析最终 `message.content`，不把推理内容作为创建信息；截断、过滤和未完成回复不创建事项。官方说明：[Kimi 快速开始与 API Key](https://platform.kimi.com/docs/get-api-key)、[Chat Completions](https://platform.kimi.ai/docs/api/chat)、[模型参数差异](https://platform.kimi.ai/docs/api/models-overview)。真实连通性需管理员填写自己的 Kimi Key 后测试。
 
 OpenAI 接口地址为 `https://api.openai.com/v1`，后端调用 Responses API，设置 `text.format.type=json_object` 和 `store=false`，使用已完成的助手消息解析创建信息；不完整、拒绝或无效 JSON 不会创建事项。默认使用低延迟的 `gpt-4.1-mini`。管理员需在 [OpenAI 平台](https://platform.openai.com/api-keys) 创建 API Key；ChatGPT / Codex 登录凭据和会员额度不能代替此 Key，API 单独计费。连接、权限或余额检查不通过时不保存新配置，原配置继续保留。
 

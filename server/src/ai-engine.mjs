@@ -25,11 +25,15 @@ export const assistantPlanSchema = z.object({
 export async function completeJson(settings, messages, fetcher = fetch) {
   const validated = aiSettingsSchema.parse(settings);
   const openai = validated.provider === 'openai';
+  const chatOptions = validated.provider === 'deepseek' ? { thinking: { type: 'disabled' } }
+    : validated.provider === 'qwen' ? { enable_thinking: false }
+    : /^kimi-k2\.(5|6)(?:-|$)/.test(validated.model) ? { thinking: { type: 'disabled' } }
+    : /^kimi-k3(?:-|$)/.test(validated.model) ? { reasoning_effort: 'low' } : {};
   const body = openai
     ? { model: validated.model, input: messages, text: { format: { type: 'json_object' } }, store: false, stream: false, max_output_tokens: 4096,
       ...(/^gpt-5\.5(?:-\d{4}-\d{2}-\d{2})?$/.test(validated.model) ? { reasoning: { effort: 'low' } } : {}) }
     : { model: validated.model, messages, response_format: { type: 'json_object' }, stream: false, max_tokens: 4096,
-      ...(validated.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : { enable_thinking: false }) };
+      ...chatOptions };
   let response;
   try {
     response = await fetcher(`${validated.baseUrl.replace(/\/$/, '')}/${openai ? 'responses' : 'chat/completions'}`, {
@@ -55,6 +59,7 @@ export async function completeJson(settings, messages, fetcher = fetch) {
       return JSON.parse(content.filter(item => item.type === 'output_text').map(item => item.text).join(''));
     }
     if (result.choices?.[0]?.finish_reason === 'length') throw new Error('truncated');
+    if (validated.provider === 'kimi' && result.choices?.[0]?.finish_reason !== 'stop') throw new Error('incomplete');
     return JSON.parse(result.choices[0].message.content);
   } catch {
     throw Object.assign(new Error('模型没有返回完整的创建信息，本次未创建事项，请重试或分批描述'), { status: 422, code: 'AI_BAD_RESPONSE' });

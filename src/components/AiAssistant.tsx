@@ -8,7 +8,7 @@ import { useWorkspace } from '../data/workspace';
 import type { WorkKind } from '../types';
 import { displayName, platformName } from '../utils';
 
-type Provider = 'deepseek' | 'qwen' | 'openai';
+type Provider = 'deepseek' | 'qwen' | 'openai' | 'kimi';
 type ModelStatus = {
   configured: boolean; managedByEnvironment: boolean; provider: Provider; model: string; baseUrl: string;
   providers: Record<Provider, { name: string; model: string; baseUrl: string }>;
@@ -31,6 +31,7 @@ function ModelSettingsForm({ status, busy, onSave, onCancel }: {
       form.setFieldsValue({ model: current.model, baseUrl: current.baseUrl, apiKey: '' });
     }} /></Form.Item>
     {selectedProvider === 'openai' && <Alert type="info" className="ai-settings-notice" title="OpenAI / Responses 兼容接口" description={<span>官方接口使用 OpenAI 平台 API Key；团队接口使用对应服务的 Key。调用权限及费用以所选服务为准。<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI 平台</a></span>} />}
+    {selectedProvider === 'kimi' && <Alert type="info" className="ai-settings-notice" title="Kimi 开放平台" description={<span>填写 Kimi 开放平台的 API Key，模型名称以账号可用模型为准。<a href="https://platform.kimi.com/console/api-keys" target="_blank" rel="noopener noreferrer">获取 Kimi API Key</a></span>} />}
     <Form.Item label="模型名称" name="model" rules={[{ required: true, message: '请输入模型名称' }, { max: 100 }]}><Input autoComplete="off" spellCheck={false} /></Form.Item>
     <Form.Item label="接口地址" name="baseUrl" rules={[{ required: true, message: '请输入服务商 HTTPS 接口地址' }, { type: 'url', message: '请输入完整 HTTPS 地址' }]}><Input type="url" autoComplete="off" spellCheck={false} /></Form.Item>
     <Form.Item label="API Key" name="apiKey" dependencies={['provider']} extra={status.configured && selectedProvider === status.provider ? 'API Key 已保存；留空可继续使用，不回显密钥。' : undefined} rules={[({ getFieldValue }) => ({ validator: (_, value) => value?.trim() || status.configured && getFieldValue('provider') === status.provider ? Promise.resolve() : Promise.reject(new Error('请输入模型服务的 API Key')) })]}><Input.Password autoComplete="new-password" placeholder={status.configured && selectedProvider === status.provider ? '已保存 Key，无需重复输入' : '粘贴服务商生成的 Key'} /></Form.Item>
