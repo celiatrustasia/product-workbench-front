@@ -97,9 +97,9 @@ function Shell() {
 }
 
 export default function Root() {
-  const { user, loading, error, retry, isVisitor } = useWorkspace();
+  const { user, loading, error, retry } = useWorkspace();
   if (loading) return <main className="account-page"><Spin size="large" /></main>;
   if (error && !user) return <main className="account-page"><section className="account-form"><Brand /><Alert type="error" title="后端服务连接失败" description={error} /><Button onClick={retry}>重新连接</Button></section></main>;
   if (user?.mustChangePassword) return <main className="account-page"><PasswordPanel initial /></main>;
-  return <><Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>{user && !isVisitor && <AiAssistant key={user.id} />}</>;
+  return <><Routes><Route path="/login" element={user ? <Navigate to="/" /> : <Login />} /><Route path="/*" element={user ? <Shell /> : <Navigate to="/login" />} /></Routes>{user && <AiAssistant key={user.id} />}</>;
 }
